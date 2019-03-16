@@ -194,7 +194,7 @@ struct Phys {
 #[repr(C)]
 struct Sbit {
     prefix:  Prefix,
-    sbit: sBIT,
+    sbit:    sBIT,
     postfix: Postfix,
 }
 
@@ -219,14 +219,14 @@ struct Sbit3 {
 #[derive(Debug, Pread)]
 #[repr(C)]
 struct Sbit4 {
-    sig: u8,
+    sig:   u8,
     alpha: u8,
 }
 
 #[derive(Debug, Pread)]
 #[repr(C)]
 struct Sbit6 {
-    rgb: RGB,
+    rgb:   RGB,
     alpha: u8,
 }
 
@@ -241,6 +241,28 @@ enum sBIT {
     sBIT3(Sbit3),
     sBIT4(Sbit4),
     sBIT6(Sbit6),
+}
+
+#[derive(Debug)]
+#[repr(C)]
+struct Text {
+    prefix:  Prefix,
+    keyword: String,
+    text:    String,
+    postfix: Postfix,
+}
+
+#[derive(Debug, Pread)]
+#[repr(C)]
+struct Time {
+    prefix:  Prefix,
+    year:    u16,
+    month:   u8,
+    day:     u8,
+    hour:    u8,
+    minute:  u8,
+    second:  u8,
+    postfix: Postfix,
 }
 
 #[derive(Debug)]
@@ -262,6 +284,8 @@ pub struct Png {
     hist: Option<Hist>,
     phys: Option<Phys>,
     sbit: Option<Sbit>,
+    text: Vec<Text>,
+    time: Option<Time>,
 }
 
 impl Png {
@@ -287,6 +311,8 @@ impl Png {
         let mut hist = None;
         let mut phys = None;
         let mut sbit = None;
+        let mut text = Vec::new();
+        let mut time = None;
 
         let ihdr: Ihdr = buf.pread_with(PNG_HEADER_SIZE, scroll::BE)?;
 
@@ -414,6 +440,24 @@ impl Png {
                         postfix: buf.pread_with(index + size + 8, scroll::BE)?,
                     });
                 },
+                "tEXt" => {
+                    let keyword = buf.pread::<&str>(index + 8)?.to_string();
+                    let inner_text = std::str::from_utf8(
+                        &buf[index + 9 + keyword.len()..index + size + 8])?.to_string();
+
+                    let text_chunk = Text {
+                        prefix: buf.pread_with(index, scroll::BE)?,
+                        keyword,
+                        text: inner_text,
+                        postfix: buf.pread_with(index + size + 8, scroll::BE)?,
+                    };
+
+                    text.push(text_chunk);
+
+                },
+                "tIME" => {
+                    time = Some(buf.pread_with(index, scroll::BE)?);
+                },
                 _ => (),
             }
 
@@ -465,6 +509,8 @@ impl Png {
             hist,
             phys,
             sbit,
+            text,
+            time,
         })
 
     }
@@ -697,6 +743,32 @@ impl Png {
                             format!("Significant bits alpha  {}",inner_sbit.alpha))));
                 },
             }
+            println!();
+        }
+
+        //
+        // tEXt
+        //
+        if self.text.len() > 0 {
+            for (_i, chunk) in self.text.iter().enumerate() {
+                fmt_png_header("tEXt", &chunk.prefix, &chunk.postfix);
+                fmt_indentln(format!("{}: {}", chunk.keyword, chunk.text));
+            }
+            println!();
+        }
+
+        //
+        // tIME
+        //
+        if let Some(time) = &self.time {
+            fmt_png_header("tIME", &time.prefix, &time.postfix);
+            fmt_indentln(format!("Date: {}.{}.{} {}:{}:{}",
+                                 time.day,
+                                 time.month,
+                                 time.year,
+                                 time.hour,
+                                 time.minute,
+                                 time.second));
             println!();
         }
 

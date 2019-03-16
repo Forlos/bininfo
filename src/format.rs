@@ -10,7 +10,7 @@ pub fn fmt_indentln(fmt: String) {
     println!("{}", fmt);
 }
 
-pub fn fmt_png_header(name: &'static str,prefix: &Prefix, postfix: &Postfix) {
+pub fn fmt_png_header(name: &'static str, prefix: &Prefix, postfix: &Postfix) {
     use ansi_term::Color;
 
     println!("{} {} {}",
