@@ -178,6 +178,18 @@ struct Hist {
     postfix: Postfix,
 }
 
+#[derive(Debug, Pread)]
+#[repr(C)]
+struct Phys {
+    prefix:  Prefix,
+    ppu_x:   u32,
+    ppu_y:   u32,
+    //0: unit is unknown
+    //1: unit is the meter
+    unit:    u8,
+    postfix: Postfix,
+}
+
 #[derive(Debug)]
 pub struct Png {
     //
@@ -195,6 +207,7 @@ pub struct Png {
     chrm: Option<Chrm>,
     gama: Option<Gama>,
     hist: Option<Hist>,
+    phys: Option<Phys>,
 }
 
 impl Png {
@@ -218,6 +231,7 @@ impl Png {
         let mut chrm = None;
         let mut gama = None;
         let mut hist = None;
+        let mut phys = None;
 
         let ihdr: Ihdr = buf.pread_with(PNG_HEADER_SIZE, scroll::BE)?;
 
@@ -313,6 +327,9 @@ impl Png {
                         panic!("Need PLTE chunk");
                     }
                 },
+                "pHYs" => {
+                    phys = Some(buf.pread_with(index, scroll::BE)?);
+                },
                 _ => (),
             }
 
@@ -362,6 +379,7 @@ impl Png {
             chrm,
             gama,
             hist,
+            phys,
         })
 
     }
@@ -518,6 +536,27 @@ impl Png {
             if trimmed {
                 fmt_indentln(format!("Output trimmed..."));
             }
+            println!();
+        }
+
+        //
+        // pHYs
+        //
+        if let Some(phys) = &self.phys {
+            fmt_png_header("pHYs", &phys.prefix, &phys.postfix);
+            let unit = {
+                if phys.unit == 0 {
+                    "unknown unit"
+                }
+                else if phys.unit == 1{
+                    "meter"
+                }
+                else {
+                    panic!("pHYs: Invalid unit specifier");
+                }
+            };
+            fmt_indentln(format!("Pixels per {}, X axis: {}", unit, phys.ppu_x));
+            fmt_indentln(format!("Pixels per {}, Y axis: {}", unit, phys.ppu_y));
             println!();
         }
 
