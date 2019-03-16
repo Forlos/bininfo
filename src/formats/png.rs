@@ -129,6 +129,22 @@ enum bKGD {
     bKGD26(Bkgd26),
 }
 
+#[derive(Debug, Pread)]
+#[repr(C)]
+struct Chrm {
+    size:     u32,
+    id:       u32,
+    white_x:  u32,
+    white_y:  u32,
+    red_x:    u32,
+    red_y:    u32,
+    green_x:  u32,
+    green_y:  u32,
+    blue_x:   u32,
+    blue_y:   u32,
+    checksum: u32,
+}
+
 #[derive(Debug)]
 pub struct Png {
     //
@@ -143,6 +159,7 @@ pub struct Png {
     // Ancillary chunks
     //
     bkgd: Option<Bkgd>,
+    chrm: Option<Chrm>,
 }
 
 impl Png {
@@ -163,6 +180,7 @@ impl Png {
         // Ancillary chunks
         //
         let mut bkgd = None;
+        let mut chrm = None;
 
         let ihdr: Ihdr = buf.pread_with(PNG_HEADER_SIZE, scroll::BE)?;
 
@@ -200,13 +218,13 @@ impl Png {
                     let color_type = ihdr.color;
                     let color;
                     if color_type == 3 {
-                        color = bKGD::bKGD3(buf.pread_with::<Bkgd3>(index + 8, scroll::BE)?);
+                        color = bKGD::bKGD3(buf.pread_with(index + 8, scroll::BE)?);
                     }
                     else if color_type == 0 || color_type == 4 {
-                        color = bKGD::bKGD04(buf.pread_with::<Bkgd04>(index + 8, scroll::BE)?);
+                        color = bKGD::bKGD04(buf.pread_with(index + 8, scroll::BE)?);
                     }
                     else if color_type == 2 || color_type == 6 {
-                        color = bKGD::bKGD26(buf.pread_with::<Bkgd26>(index + 8, scroll::BE)?);
+                        color = bKGD::bKGD26(buf.pread_with(index + 8, scroll::BE)?);
                     }
                     else {
                         panic!("Invalid color type for bKGD");
@@ -217,6 +235,9 @@ impl Png {
                         color,
                         checksum: buf.pread_with(index + size + 8, scroll::BE)?,
                     });
+                },
+                "cHRM" => {
+                    chrm = Some(buf.pread_with(index, scroll::BE)?);
                 },
                 _ => (),
             }
@@ -262,7 +283,9 @@ impl Png {
             idat,
             zlib,
             iend,
+
             bkgd,
+            chrm,
         })
 
     }
@@ -332,13 +355,12 @@ impl Png {
 
         for idat in &self.idat {
             table.add_row(row![r->idx,
-                               rFr->idat.size,
-                               rFb->format!("{:#010X}", idat.checksum)]);
+                               rFy->idat.size,
+                               rFg->format!("{:#010X}", idat.checksum)]);
             idx += 1;
         }
         table.printstd();
         println!();
-
 
         //
         // bKGD
@@ -364,6 +386,49 @@ impl Png {
                                          Color::Blue.paint(format!("{:#06X}",bkgd.blue))));
                 },
             }
+            println!();
+        }
+
+        //
+        // cHRM
+        //
+        if let Some(chrm) = &self.chrm {
+            println!("{} {} {}",
+                     Color::White.underline().paint("cHRM"),
+                     Color::Yellow.paint(format!("Size: {}", chrm.size)),
+                     Color::Green.paint(format!("Checksum: {:#010X}", chrm.checksum)),);
+
+            let mut table = Table::new();
+            let format = prettytable::format::FormatBuilder::new()
+                .column_separator(' ')
+                .borders(' ')
+                .padding(1, 1)
+                .build();
+            table.set_format(format);
+            table.add_row(row![r->"Color", r->"X", r->"Y", r->"Point x", r->"Point y"]);
+            table.add_row(row![Fwr=>"White",
+                               chrm.white_x, chrm.white_y,
+                               format!("{:.5}",chrm.white_x as f32 / 100000.0),
+                               format!("{:.5}",chrm.white_y as f32 / 100000.0)]);
+            table.add_row(row![Frr=>"Red",
+                               chrm.red_x, chrm.red_y,
+                               format!("{:.5}",chrm.red_x as f32 / 100000.0),
+                               format!("{:.5}",chrm.red_y as f32 / 100000.0)]);
+            table.add_row(row![Fgl=>"Green",
+                               chrm.green_x, chrm.green_y,
+                               format!("{:.5}",chrm.green_x as f32 / 100000.0),
+                               format!("{:.5}",chrm.green_y as f32 / 100000.0)]);
+            table.add_row(row![Fbr=>"Blue",
+                               chrm.blue_x, chrm.blue_y,
+                               format!("{:.5}",chrm.blue_x as f32 / 100000.0),
+                               format!("{:.5}",chrm.blue_y as f32 / 100000.0)]);
+            table.printstd();
+
+            // print_chrm_point("White", chrm.white_x, chrm.white_y, Color::White);
+            // print_chrm_point("Red", chrm.red_x,   chrm.red_y,   Color::Red);
+            // print_chrm_point("Green", chrm.green_x, chrm.green_y, Color::Green);
+            // print_chrm_point("Blue", chrm.blue_x,  chrm.blue_y,  Color::Blue);
+
             println!();
         }
 
