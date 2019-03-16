@@ -93,12 +93,56 @@ struct Iend {
 }
 
 #[derive(Debug)]
+#[repr(C)]
+struct Bkgd {
+    size: u32,
+    id: u32,
+    color: bKGD,
+    checksum: u32,
+}
+
+#[derive(Debug, Pread)]
+#[repr(C)]
+struct Bkgd3 {
+    index: u8,
+}
+
+#[derive(Debug, Pread)]
+#[repr(C)]
+struct Bkgd04 {
+    gray: u16,
+}
+
+#[derive(Debug, Pread)]
+#[repr(C)]
+struct Bkgd26 {
+    red:   u16,
+    green: u16,
+    blue : u16,
+}
+
+#[derive(Debug)]
+#[allow(non_camel_case_types)]
+enum bKGD {
+    bKGD3(Bkgd3),
+    bKGD04(Bkgd04),
+    bKGD26(Bkgd26),
+}
+
+#[derive(Debug)]
 pub struct Png {
+    //
+    // Critical chunks
+    //
     ihdr: Ihdr,
     plte: Option<Plte>,
     idat: Vec<Idat>,
     zlib: Zlib,
     iend: Option<Iend>,
+    //
+    // Ancillary chunks
+    //
+    bkgd: Option<Bkgd>,
 }
 
 impl Png {
@@ -107,10 +151,18 @@ impl Png {
 
         const CHUNK_SIZE: usize = 12;
 
+        //
+        // Critical chunks
+        //
         let mut plte = None;
         let mut idat = Vec::new();
         let mut data = Vec::new();
         let mut iend = None;
+
+        //
+        // Ancillary chunks
+        //
+        let mut bkgd = None;
 
         let ihdr: Ihdr = buf.pread_with(PNG_HEADER_SIZE, scroll::BE)?;
 
@@ -144,8 +196,32 @@ impl Png {
                 "IEND" => {
                     iend = Some(buf.pread_with(index, scroll::BE)?);
                 },
+                "bKGD" => {
+                    let color_type = ihdr.color;
+                    let color;
+                    if color_type == 3 {
+                        color = bKGD::bKGD3(buf.pread_with::<Bkgd3>(index + 8, scroll::BE)?);
+                    }
+                    else if color_type == 0 || color_type == 4 {
+                        color = bKGD::bKGD04(buf.pread_with::<Bkgd04>(index + 8, scroll::BE)?);
+                    }
+                    else if color_type == 2 || color_type == 6 {
+                        color = bKGD::bKGD26(buf.pread_with::<Bkgd26>(index + 8, scroll::BE)?);
+                    }
+                    else {
+                        panic!("Invalid color type for bKGD");
+                    }
+                    bkgd = Some(Bkgd {
+                        size:     buf.pread_with(index , scroll::BE)?,
+                        id:       buf.pread_with(index + 4, scroll::BE)?,
+                        color,
+                        checksum: buf.pread_with(index + size + 8, scroll::BE)?,
+                    });
+                },
                 _ => (),
             }
+
+            println!("{}", s);
 
             index += size + CHUNK_SIZE;
 
@@ -186,6 +262,7 @@ impl Png {
             idat,
             zlib,
             iend,
+            bkgd,
         })
 
     }
@@ -233,14 +310,15 @@ impl Png {
         //
         // IDAT
         //
-        println!("{}({}) {} {} {} {} {}",
+        println!("{}({}) {} {} {} {} {} {}",
             Color::White.underline().paint("IDAT"),
             self.idat.len(),
             Color::Purple.paint(format!("Compression method: {}",self.zlib.cmf << 4 >> 4)),
             Color::Cyan.paint(format!("Compression info: {}",self.zlib.cmf >> 4)),
             Color::Green.paint(format!("Checksum: {:#07b}", self.zlib.flg << 3 >> 3)),
             Color::Red.paint(format!("Dict: {:#03b}", self.zlib.flg << 2 >> 7)),
-            Color::Yellow.paint(format!("Compression level: {:#04b}", self.zlib.flg >> 6)),);
+            Color::Yellow.paint(format!("Compression level: {:#04b}", self.zlib.flg >> 6)),
+            Color::Fixed(221).paint(format!("Adler: {:#010X}", self.zlib.adler)));
 
         let mut idx = 0;
         let mut table = Table::new();
@@ -260,6 +338,34 @@ impl Png {
         }
         table.printstd();
         println!();
+
+
+        //
+        // bKGD
+        //
+        if let Some(background) = &self.bkgd {
+            println!("{} {} {}",
+                     Color::White.underline().paint("bKGD"),
+                     Color::Yellow.paint(format!("Size: {}",background.size)),
+                     Color::Green.paint(format!("Checksum: {:#010X}", background.checksum)));
+            match &background.color {
+                bKGD::bKGD3(bkgd)  => {
+                    fmt_indentln(format!("Palette index: {}", bkgd.index));
+                },
+                bKGD::bKGD04(bkgd) => {
+                    fmt_indentln(format!("Gray: {:#06X}", bkgd.gray));
+                },
+                bKGD::bKGD26(bkgd) => {
+                    fmt_indentln(format!("Red:   {}",
+                                         Color::Red.paint(format!("{:#06X}",bkgd.red))));
+                    fmt_indentln(format!("Green: {}",
+                                         Color::Green.paint(format!("{:#06X}",bkgd.green))));
+                    fmt_indentln(format!("Blue:  {}",
+                                         Color::Blue.paint(format!("{:#06X}",bkgd.blue))));
+                },
+            }
+            println!();
+        }
 
         //
         // IEND
