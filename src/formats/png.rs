@@ -4,19 +4,30 @@ use failure::{
     Error,
 };
 
-use crate::format::{fmt_indentln};
+use crate::format::{fmt_indentln, fmt_png_header};
 
 pub const PNG_HEADER: &'static [u8; PNG_HEADER_SIZE] = b"\x89PNG\x0D\x0A\x1A\x0A";
 pub const PNG_HEADER_SIZE: usize = 8;
 
 // const IHDR_SIZE: usize = PNG_HEADER_SIZE + 25;
 
+#[derive(Debug, Pread)]
+#[repr(C)]
+pub struct Prefix {
+    pub size: u32,
+    id:   u32,
+}
+
+#[derive(Debug, Pread)]
+#[repr(C)]
+pub struct Postfix {
+    pub checksum: u32,
+}
 
 #[derive(Debug, Pread)]
 #[repr(C)]
 struct Ihdr {
-    size:        u32,
-    id:          u32,
+    prefix:      Prefix,
     width:       i32,
     height:      i32,
     bpp:         u8,
@@ -24,18 +35,17 @@ struct Ihdr {
     compression: u8,
     filter:      u8,
     interlace:   u8,
-    checksum:    u32,
+    postfix:     Postfix,
 }
 
 #[derive(Debug, Pread)]
 #[repr(C)]
 struct Plte {
-    size:     u32,
-    id:       u32,
-    red:      u8,
-    green:    u8,
-    blue:     u8,
-    checksum: u32,
+    prefix:  Prefix,
+    red:     u8,
+    green:   u8,
+    blue:    u8,
+    postfix: Postfix,
 }
 
 #[derive(Debug, Pread)]
@@ -49,9 +59,9 @@ struct Zlib {
     // bits 0 to 4  FCHECK  (check bits for CMF and FLG)
     // bit  5       FDICT   (preset dictionary)
     // bits 6 to 7  FLEVEL  (compression level)
-    flg: u8,
+    flg:     u8,
     deflate: Deflate,
-    adler: u32,
+    adler:   u32,
 }
 
 #[derive(Debug, Pread)]
@@ -80,25 +90,23 @@ struct Deflate {
 #[derive(Debug)]
 #[repr(C)]
 struct Idat {
-    size:     u32,
-    checksum: u32,
+    prefix: Prefix,
+    postfix: Postfix,
 }
 
 #[derive(Debug, Pread)]
 #[repr(C)]
 struct Iend {
-    size:     u32,
-    id:       u32,
-    checksum: u32,
+    prefix:  Prefix,
+    postfix: Postfix,
 }
 
 #[derive(Debug)]
 #[repr(C)]
 struct Bkgd {
-    size: u32,
-    id: u32,
-    color: bKGD,
-    checksum: u32,
+    prefix:  Prefix,
+    color:   bKGD,
+    postfix: Postfix,
 }
 
 #[derive(Debug, Pread)]
@@ -132,17 +140,24 @@ enum bKGD {
 #[derive(Debug, Pread)]
 #[repr(C)]
 struct Chrm {
-    size:     u32,
-    id:       u32,
-    white_x:  u32,
-    white_y:  u32,
-    red_x:    u32,
-    red_y:    u32,
-    green_x:  u32,
-    green_y:  u32,
-    blue_x:   u32,
-    blue_y:   u32,
-    checksum: u32,
+    prefix:  Prefix,
+    white_x: u32,
+    white_y: u32,
+    red_x:   u32,
+    red_y:   u32,
+    green_x: u32,
+    green_y: u32,
+    blue_x:  u32,
+    blue_y:  u32,
+    postfix: Postfix,
+}
+
+#[derive(Debug, Pread)]
+#[repr(C)]
+struct Gama {
+    prefix:  Prefix,
+    gamma:   u32,
+    postfix: Postfix,
 }
 
 #[derive(Debug)]
@@ -160,6 +175,7 @@ pub struct Png {
     //
     bkgd: Option<Bkgd>,
     chrm: Option<Chrm>,
+    gama: Option<Gama>,
 }
 
 impl Png {
@@ -181,6 +197,7 @@ impl Png {
         //
         let mut bkgd = None;
         let mut chrm = None;
+        let mut gama = None;
 
         let ihdr: Ihdr = buf.pread_with(PNG_HEADER_SIZE, scroll::BE)?;
 
@@ -204,8 +221,9 @@ impl Png {
                     data.append(&mut inner_data);
 
                     let dat = Idat {
-                        size: size as u32,
-                        checksum: buf.pread_with(index + size + 8, scroll::BE)?,
+                        prefix: buf.pread_with(index, scroll::BE)?,
+                        postfix: buf.pread_with(index + size + 8, scroll::BE)?,
+
                     };
 
                     idat.push(dat);
@@ -230,14 +248,16 @@ impl Png {
                         panic!("Invalid color type for bKGD");
                     }
                     bkgd = Some(Bkgd {
-                        size:     buf.pread_with(index , scroll::BE)?,
-                        id:       buf.pread_with(index + 4, scroll::BE)?,
+                        prefix: buf.pread_with(index, scroll::BE)?,
                         color,
-                        checksum: buf.pread_with(index + size + 8, scroll::BE)?,
+                        postfix: buf.pread_with(index + size + 8, scroll::BE)?,
                     });
                 },
                 "cHRM" => {
                     chrm = Some(buf.pread_with(index, scroll::BE)?);
+                },
+                "gAMA" => {
+                    gama = Some(buf.pread_with(index, scroll::BE)?);
                 },
                 _ => (),
             }
@@ -286,6 +306,7 @@ impl Png {
 
             bkgd,
             chrm,
+            gama,
         })
 
     }
@@ -305,28 +326,52 @@ impl Png {
         //
         // IHDR
         //
-        println!("{}:", Color::White.underline().paint("IHDR"));
+        fmt_png_header("IHDR", &self.ihdr.prefix, &self.ihdr.postfix);
         fmt_indentln(format!("Image width: {} height: {}", self.ihdr.width, self.ihdr.height));
         fmt_indentln(format!("Bits per pixel: {}", self.ihdr.bpp));
         fmt_indentln(format!("Color type: {}", self.ihdr.color));
         fmt_indentln(format!("Compression method: {}", self.ihdr.compression));
         fmt_indentln(format!("Filter method: {}", self.ihdr.filter));
         fmt_indentln(format!("Interlace method: {}", self.ihdr.interlace));
-        fmt_indentln(format!("Checksum: {:#010X}", self.ihdr.checksum));
+        fmt_indentln(format!("Checksum: {:#010X}", self.ihdr.postfix.checksum));
         println!();
 
         //
         // PLTE
         //
         if let Some(plte) = &self.plte {
-            println!("{}:", Color::White.underline().paint("PLTE"));
+            fmt_png_header("PLTE", &plte.prefix, &plte.postfix);
             fmt_indentln(format!("Red:   {}",
                                  Color::Red.paint(format!("{:#04X}",plte.red))));
             fmt_indentln(format!("Green: {}",
                                  Color::Green.paint(format!("{:#04X}", plte.green))));
             fmt_indentln(format!("Blue:  {}",
                                  Color::Blue.paint(format!("{:#04X}", plte.blue))));
-            fmt_indentln(format!("Checksum: {:#010X}", plte.checksum));
+            fmt_indentln(format!("Checksum: {:#010X}", plte.postfix.checksum));
+            println!();
+        }
+
+        //
+        // bKGD
+        //
+        if let Some(background) = &self.bkgd {
+            fmt_png_header("bKGD", &background.prefix, &background.postfix);
+            match &background.color {
+                bKGD::bKGD3(bkgd)  => {
+                    fmt_indentln(format!("Palette index: {}", bkgd.index));
+                },
+                bKGD::bKGD04(bkgd) => {
+                    fmt_indentln(format!("Gray: {:#06X}", bkgd.gray));
+                },
+                bKGD::bKGD26(bkgd) => {
+                    fmt_indentln(format!("Red:   {}",
+                                         Color::Red.paint(format!("{:#06X}",bkgd.red))));
+                    fmt_indentln(format!("Green: {}",
+                                         Color::Green.paint(format!("{:#06X}",bkgd.green))));
+                    fmt_indentln(format!("Blue:  {}",
+                                         Color::Blue.paint(format!("{:#06X}",bkgd.blue))));
+                },
+            }
             println!();
         }
 
@@ -355,48 +400,18 @@ impl Png {
 
         for idat in &self.idat {
             table.add_row(row![r->idx,
-                               rFy->idat.size,
-                               rFg->format!("{:#010X}", idat.checksum)]);
+                               rFy->idat.prefix.size,
+                               rFg->format!("{:#010X}", idat.postfix.checksum)]);
             idx += 1;
         }
         table.printstd();
         println!();
 
         //
-        // bKGD
-        //
-        if let Some(background) = &self.bkgd {
-            println!("{} {} {}",
-                     Color::White.underline().paint("bKGD"),
-                     Color::Yellow.paint(format!("Size: {}",background.size)),
-                     Color::Green.paint(format!("Checksum: {:#010X}", background.checksum)));
-            match &background.color {
-                bKGD::bKGD3(bkgd)  => {
-                    fmt_indentln(format!("Palette index: {}", bkgd.index));
-                },
-                bKGD::bKGD04(bkgd) => {
-                    fmt_indentln(format!("Gray: {:#06X}", bkgd.gray));
-                },
-                bKGD::bKGD26(bkgd) => {
-                    fmt_indentln(format!("Red:   {}",
-                                         Color::Red.paint(format!("{:#06X}",bkgd.red))));
-                    fmt_indentln(format!("Green: {}",
-                                         Color::Green.paint(format!("{:#06X}",bkgd.green))));
-                    fmt_indentln(format!("Blue:  {}",
-                                         Color::Blue.paint(format!("{:#06X}",bkgd.blue))));
-                },
-            }
-            println!();
-        }
-
-        //
         // cHRM
         //
         if let Some(chrm) = &self.chrm {
-            println!("{} {} {}",
-                     Color::White.underline().paint("cHRM"),
-                     Color::Yellow.paint(format!("Size: {}", chrm.size)),
-                     Color::Green.paint(format!("Checksum: {:#010X}", chrm.checksum)),);
+            fmt_png_header("cHRM", &chrm.prefix, &chrm.postfix);
 
             let mut table = Table::new();
             let format = prettytable::format::FormatBuilder::new()
@@ -423,12 +438,17 @@ impl Png {
                                format!("{:.5}",chrm.blue_x as f32 / 100000.0),
                                format!("{:.5}",chrm.blue_y as f32 / 100000.0)]);
             table.printstd();
+            println!();
+        }
 
-            // print_chrm_point("White", chrm.white_x, chrm.white_y, Color::White);
-            // print_chrm_point("Red", chrm.red_x,   chrm.red_y,   Color::Red);
-            // print_chrm_point("Green", chrm.green_x, chrm.green_y, Color::Green);
-            // print_chrm_point("Blue", chrm.blue_x,  chrm.blue_y,  Color::Blue);
-
+        //
+        // gAMA
+        //
+        if let Some(gama) = &self.gama {
+            fmt_png_header("gAMA", &gama.prefix, &gama.postfix);
+            fmt_indentln(format!("Gamma: {} ({})",
+                                 gama.gamma,
+                                 format!("{:.5}", gama.gamma as f32 / 100000.0)));
             println!();
         }
 
@@ -436,8 +456,7 @@ impl Png {
         // IEND
         //
         if let Some(iend) = &self.iend {
-            println!("{}:", Color::White.underline().paint("IEND"));
-            fmt_indentln(format!("Checksum: {:#010X}", iend.checksum));
+            fmt_png_header("IEND", &iend.prefix, &iend.postfix);
         }
 
         Ok(())
