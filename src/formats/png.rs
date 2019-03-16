@@ -9,6 +9,8 @@ use crate::format::{fmt_indentln, fmt_png_header};
 pub const PNG_HEADER: &'static [u8; PNG_HEADER_SIZE] = b"\x89PNG\x0D\x0A\x1A\x0A";
 pub const PNG_HEADER_SIZE: usize = 8;
 
+// TODO allow to use this as a argument and disable trimming in general.
+const TRIM_INDEX: usize = 100;
 // const IHDR_SIZE: usize = PNG_HEADER_SIZE + 25;
 
 #[derive(Debug, Pread)]
@@ -26,6 +28,14 @@ pub struct Postfix {
 
 #[derive(Debug, Pread)]
 #[repr(C)]
+struct RGB {
+    red:     u8,
+    green:   u8,
+    blue:    u8,
+}
+
+#[derive(Debug, Pread)]
+#[repr(C)]
 struct Ihdr {
     prefix:      Prefix,
     width:       i32,
@@ -38,13 +48,11 @@ struct Ihdr {
     postfix:     Postfix,
 }
 
-#[derive(Debug, Pread)]
+#[derive(Debug)]
 #[repr(C)]
 struct Plte {
     prefix:  Prefix,
-    red:     u8,
-    green:   u8,
-    blue:    u8,
+    rgb:     Vec<RGB>,
     postfix: Postfix,
 }
 
@@ -214,7 +222,21 @@ impl Png {
                     ()
                 },
                 "PLTE" => {
-                    plte = Some(buf.pread_with(index, scroll::BE)?);
+                    let prefix = buf.pread_with::<Prefix>(index, scroll::BE)?;
+                    let size = prefix.size as usize;
+                    if size % 3 != 0 {
+                        panic!("PLTE Length must be divisible by 3");
+                    }
+                    let mut rgb = Vec::new();
+                    for i in 0..size / 3 {
+                        rgb.push(buf.pread_with::<RGB>(index + 8 + i * 3,
+                                                       scroll::BE)?)
+                    }
+                    plte = Some(Plte {
+                        prefix,
+                        rgb,
+                        postfix: buf.pread_with(index + size + 8, scroll::BE)?,
+                    });
                 },
                 "IDAT" => {
                     let mut inner_data = buf[index + 8..index + 8 + size].to_vec();
@@ -341,13 +363,30 @@ impl Png {
         //
         if let Some(plte) = &self.plte {
             fmt_png_header("PLTE", &plte.prefix, &plte.postfix);
-            fmt_indentln(format!("Red:   {}",
-                                 Color::Red.paint(format!("{:#04X}",plte.red))));
-            fmt_indentln(format!("Green: {}",
-                                 Color::Green.paint(format!("{:#04X}", plte.green))));
-            fmt_indentln(format!("Blue:  {}",
-                                 Color::Blue.paint(format!("{:#04X}", plte.blue))));
-            fmt_indentln(format!("Checksum: {:#010X}", plte.postfix.checksum));
+
+            let mut trimmed = false;
+            let mut table = Table::new();
+            let format = prettytable::format::FormatBuilder::new()
+                .column_separator(' ')
+                .borders(' ')
+                .padding(1, 1)
+                .build();
+            table.set_format(format);
+            table.add_row(row![r->"Idx", rFr->"Red", rFg->"Green", rFb->"Blue"]);
+            for (i, rgb) in plte.rgb.iter().enumerate() {
+                table.add_row(row![r->i,
+                                   rFr->format!("{:#04X}", rgb.red),
+                                   rFg->format!("{:#04X}", rgb.green),
+                                   rFb->format!("{:#04X}", rgb.blue)]);
+                if i == TRIM_INDEX {
+                    trimmed = true;
+                    break;
+                }
+            }
+            table.printstd();
+            if trimmed {
+                fmt_indentln(format!("Output trimmed..."));
+            }
             println!();
         }
 
@@ -378,34 +417,43 @@ impl Png {
         //
         // IDAT
         //
-        println!("{}({}) {} {} {} {} {} {}",
-            Color::White.underline().paint("IDAT"),
-            self.idat.len(),
-            Color::Purple.paint(format!("Compression method: {}",self.zlib.cmf << 4 >> 4)),
-            Color::Cyan.paint(format!("Compression info: {}",self.zlib.cmf >> 4)),
-            Color::Green.paint(format!("Checksum: {:#07b}", self.zlib.flg << 3 >> 3)),
-            Color::Red.paint(format!("Dict: {:#03b}", self.zlib.flg << 2 >> 7)),
-            Color::Yellow.paint(format!("Compression level: {:#04b}", self.zlib.flg >> 6)),
-            Color::Fixed(221).paint(format!("Adler: {:#010X}", self.zlib.adler)));
+        {
+            println!("{}({}) {} {} {} {} {} {}",
+                Color::White.underline().paint("IDAT"),
+                self.idat.len(),
+                Color::Purple.paint(format!("Compression method: {}",self.zlib.cmf << 4 >> 4)),
+                Color::Cyan.paint(format!("Compression info: {}",self.zlib.cmf >> 4)),
+                Color::Green.paint(format!("Checksum: {:#07b}", self.zlib.flg << 3 >> 3)),
+                Color::Red.paint(format!("Dict: {:#03b}", self.zlib.flg << 2 >> 7)),
+                Color::Yellow.paint(format!("Compression level: {:#04b}", self.zlib.flg >> 6)),
+                Color::Fixed(221).paint(format!("Adler: {:#010X}", self.zlib.adler)));
 
-        let mut idx = 0;
-        let mut table = Table::new();
-        let format = prettytable::format::FormatBuilder::new()
-            .column_separator(' ')
-            .borders(' ')
-            .padding(1, 1)
-            .build();
-        table.set_format(format);
-        table.add_row(row![l->"Idx", l->"Size", l->"Checksum"]);
+            let mut trimmed = false;
+                let mut table = Table::new();
+            let format = prettytable::format::FormatBuilder::new()
+                .column_separator(' ')
+                .borders(' ')
+                .padding(1, 1)
+                .build();
+            table.set_format(format);
+            table.add_row(row![l->"Idx", l->"Size", l->"Checksum"]);
 
-        for idat in &self.idat {
-            table.add_row(row![r->idx,
-                               rFy->idat.prefix.size,
-                               rFg->format!("{:#010X}", idat.postfix.checksum)]);
-            idx += 1;
+            for (i, idat) in self.idat.iter().enumerate() {
+                table.add_row(row![r->i,
+                                   rFy->idat.prefix.size,
+                                   rFg->format!("{:#010X}", idat.postfix.checksum)]);
+                if i == TRIM_INDEX {
+                    trimmed = true;
+                    break;
+                }
+            }
+            table.printstd();
+            if trimmed {
+                fmt_indentln(format!("Output trimmed..."));
+            }
+            println!();
+
         }
-        table.printstd();
-        println!();
 
         //
         // cHRM
