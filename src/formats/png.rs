@@ -191,6 +191,59 @@ struct Phys {
 }
 
 #[derive(Debug)]
+#[repr(C)]
+struct Sbit {
+    prefix:  Prefix,
+    sbit: sBIT,
+    postfix: Postfix,
+}
+
+#[derive(Debug, Pread)]
+#[repr(C)]
+struct Sbit0 {
+    sig: u8,
+}
+
+#[derive(Debug, Pread)]
+#[repr(C)]
+struct Sbit2 {
+    rgb: RGB,
+}
+
+#[derive(Debug, Pread)]
+#[repr(C)]
+struct Sbit3 {
+    rgb: RGB,
+}
+
+#[derive(Debug, Pread)]
+#[repr(C)]
+struct Sbit4 {
+    sig: u8,
+    alpha: u8,
+}
+
+#[derive(Debug, Pread)]
+#[repr(C)]
+struct Sbit6 {
+    rgb: RGB,
+    alpha: u8,
+}
+
+
+#[derive(Debug)]
+#[repr(C)]
+#[allow(non_camel_case_types)]
+// https://tools.ietf.org/html/rfc2083#page-23
+enum sBIT {
+    sBIT0(Sbit0),
+    sBIT2(Sbit2),
+    sBIT3(Sbit3),
+    sBIT4(Sbit4),
+    sBIT6(Sbit6),
+}
+
+#[derive(Debug)]
 pub struct Png {
     //
     // Critical chunks
@@ -208,6 +261,7 @@ pub struct Png {
     gama: Option<Gama>,
     hist: Option<Hist>,
     phys: Option<Phys>,
+    sbit: Option<Sbit>,
 }
 
 impl Png {
@@ -232,6 +286,7 @@ impl Png {
         let mut gama = None;
         let mut hist = None;
         let mut phys = None;
+        let mut sbit = None;
 
         let ihdr: Ihdr = buf.pread_with(PNG_HEADER_SIZE, scroll::BE)?;
 
@@ -330,6 +385,35 @@ impl Png {
                 "pHYs" => {
                     phys = Some(buf.pread_with(index, scroll::BE)?);
                 },
+                "sBIT" => {
+                    let color_type = ihdr.color;
+                    let inner_sbit;
+                    match color_type {
+                        0 => {
+                            inner_sbit = sBIT::sBIT0(buf.pread_with(index + 8, scroll::BE)?);
+                        },
+                        2 => {
+                            inner_sbit = sBIT::sBIT2(buf.pread_with(index + 8, scroll::BE)?);
+                        },
+                        3 => {
+                            inner_sbit = sBIT::sBIT3(buf.pread_with(index + 8, scroll::BE)?);
+                        },
+                        4 => {
+                            inner_sbit = sBIT::sBIT4(buf.pread_with(index + 8, scroll::BE)?);
+                        },
+                        6 => {
+                            inner_sbit = sBIT::sBIT6(buf.pread_with(index + 8, scroll::BE)?);
+                        },
+                        _ => {
+                            panic!("Invalid color type for sBIT");
+                        }
+                    }
+                    sbit = Some(Sbit {
+                        prefix: buf.pread_with(index, scroll::BE)?,
+                        sbit: inner_sbit,
+                        postfix: buf.pread_with(index + size + 8, scroll::BE)?,
+                    });
+                },
                 _ => (),
             }
 
@@ -380,6 +464,7 @@ impl Png {
             gama,
             hist,
             phys,
+            sbit,
         })
 
     }
@@ -557,6 +642,61 @@ impl Png {
             };
             fmt_indentln(format!("Pixels per {}, X axis: {}", unit, phys.ppu_x));
             fmt_indentln(format!("Pixels per {}, Y axis: {}", unit, phys.ppu_y));
+            println!();
+        }
+
+        //
+        // sBIT
+        //
+        if let Some(sbit) = &self.sbit {
+            fmt_png_header("sBIT", &sbit.prefix, &sbit.postfix);
+            match &sbit.sbit {
+                sBIT::sBIT0(inner_sbit) => {
+                    fmt_indentln(format!("Significant bits: {}", inner_sbit.sig));
+                },
+                sBIT::sBIT2(inner_sbit) => {
+                    fmt_indentln(format!("{}",
+                        Color::Red.paint(
+                            format!("Significant bits red:   {}",inner_sbit.rgb.red))));
+                    fmt_indentln(format!("{}",
+                        Color::Green.paint(
+                            format!("Significant bits green: {}",inner_sbit.rgb.green))));
+                    fmt_indentln(format!("{}",
+                        Color::Blue.paint(
+                            format!("Significant bits blue:  {}",inner_sbit.rgb.blue))));
+                },
+                sBIT::sBIT3(inner_sbit) => {
+                    fmt_indentln(format!("{}",
+                        Color::Red.paint(
+                            format!("Significant bits red:   {}",inner_sbit.rgb.red))));
+                    fmt_indentln(format!("{}",
+                        Color::Green.paint(
+                            format!("Significant bits green: {}",inner_sbit.rgb.green))));
+                    fmt_indentln(format!("{}",
+                        Color::Blue.paint(
+                            format!("Significant bits blue:  {}",inner_sbit.rgb.blue))));
+                },
+                sBIT::sBIT4(inner_sbit) => {
+                    fmt_indentln(format!("Significant bits: {}", inner_sbit.sig));
+                    fmt_indentln(format!("{}",
+                        Color::White.paint(
+                            format!("Significant bits alpha  {}",inner_sbit.alpha))));
+                },
+                sBIT::sBIT6(inner_sbit) => {
+                    fmt_indentln(format!("{}",
+                        Color::Red.paint(
+                            format!("Significant bits red:   {}",inner_sbit.rgb.red))));
+                    fmt_indentln(format!("{}",
+                        Color::Green.paint(
+                            format!("Significant bits green: {}",inner_sbit.rgb.green))));
+                    fmt_indentln(format!("{}",
+                        Color::Blue.paint(
+                            format!("Significant bits blue:  {}",inner_sbit.rgb.blue))));
+                    fmt_indentln(format!("{}",
+                        Color::White.paint(
+                            format!("Significant bits alpha  {}",inner_sbit.alpha))));
+                },
+            }
             println!();
         }
 
