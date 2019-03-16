@@ -10,7 +10,7 @@ pub const PNG_HEADER: &'static [u8; PNG_HEADER_SIZE] = b"\x89PNG\x0D\x0A\x1A\x0A
 pub const PNG_HEADER_SIZE: usize = 8;
 
 // TODO allow to use this as a argument and disable trimming in general.
-const TRIM_INDEX: usize = 100;
+const TRIM_INDEX: usize = 20;
 // const IHDR_SIZE: usize = PNG_HEADER_SIZE + 25;
 
 #[derive(Debug, Pread)]
@@ -169,6 +169,16 @@ struct Gama {
 }
 
 #[derive(Debug)]
+#[repr(C)]
+struct Hist {
+    prefix:  Prefix,
+    entries: Vec<u16>,
+    // Sum of all entries
+    sum:     u64,
+    postfix: Postfix,
+}
+
+#[derive(Debug)]
 pub struct Png {
     //
     // Critical chunks
@@ -184,6 +194,7 @@ pub struct Png {
     bkgd: Option<Bkgd>,
     chrm: Option<Chrm>,
     gama: Option<Gama>,
+    hist: Option<Hist>,
 }
 
 impl Png {
@@ -206,6 +217,7 @@ impl Png {
         let mut bkgd = None;
         let mut chrm = None;
         let mut gama = None;
+        let mut hist = None;
 
         let ihdr: Ihdr = buf.pread_with(PNG_HEADER_SIZE, scroll::BE)?;
 
@@ -281,6 +293,26 @@ impl Png {
                 "gAMA" => {
                     gama = Some(buf.pread_with(index, scroll::BE)?);
                 },
+                "hIST" => {
+                    if let Some(plte) = &plte {
+                        let hist_size = (plte.prefix.size / 3) as usize;
+                        let mut entries = Vec::with_capacity(hist_size);
+                        let mut sum = 0;
+                        for i in 0..hist_size {
+                            entries.push(buf.pread_with(index + 8 + i * 2, scroll::BE)?);
+                            sum += entries[i] as u64;
+                        }
+                        hist = Some(Hist {
+                            prefix: buf.pread_with(index, scroll::BE)?,
+                            entries,
+                            sum,
+                            postfix: buf.pread_with(index + size + 8, scroll::BE)?,
+                        });
+                    }
+                    else {
+                        panic!("Need PLTE chunk");
+                    }
+                },
                 _ => (),
             }
 
@@ -329,6 +361,7 @@ impl Png {
             bkgd,
             chrm,
             gama,
+            hist,
         })
 
     }
@@ -415,47 +448,6 @@ impl Png {
         }
 
         //
-        // IDAT
-        //
-        {
-            println!("{}({}) {} {} {} {} {} {}",
-                Color::White.underline().paint("IDAT"),
-                self.idat.len(),
-                Color::Purple.paint(format!("Compression method: {}",self.zlib.cmf << 4 >> 4)),
-                Color::Cyan.paint(format!("Compression info: {}",self.zlib.cmf >> 4)),
-                Color::Green.paint(format!("Checksum: {:#07b}", self.zlib.flg << 3 >> 3)),
-                Color::Red.paint(format!("Dict: {:#03b}", self.zlib.flg << 2 >> 7)),
-                Color::Yellow.paint(format!("Compression level: {:#04b}", self.zlib.flg >> 6)),
-                Color::Fixed(221).paint(format!("Adler: {:#010X}", self.zlib.adler)));
-
-            let mut trimmed = false;
-                let mut table = Table::new();
-            let format = prettytable::format::FormatBuilder::new()
-                .column_separator(' ')
-                .borders(' ')
-                .padding(1, 1)
-                .build();
-            table.set_format(format);
-            table.add_row(row![l->"Idx", l->"Size", l->"Checksum"]);
-
-            for (i, idat) in self.idat.iter().enumerate() {
-                table.add_row(row![r->i,
-                                   rFy->idat.prefix.size,
-                                   rFg->format!("{:#010X}", idat.postfix.checksum)]);
-                if i == TRIM_INDEX {
-                    trimmed = true;
-                    break;
-                }
-            }
-            table.printstd();
-            if trimmed {
-                fmt_indentln(format!("Output trimmed..."));
-            }
-            println!();
-
-        }
-
-        //
         // cHRM
         //
         if let Some(chrm) = &self.chrm {
@@ -498,6 +490,76 @@ impl Png {
                                  gama.gamma,
                                  format!("{:.5}", gama.gamma as f32 / 100000.0)));
             println!();
+        }
+        //
+        // hIST
+        //
+        if let Some(hist) = &self.hist {
+            fmt_png_header("hIST", &hist.prefix, &hist.postfix);
+
+            let mut trimmed = false;
+            let mut table = Table::new();
+            let format = prettytable::format::FormatBuilder::new()
+                .column_separator(' ')
+                .borders(' ')
+                .padding(1, 1)
+                .build();
+            table.set_format(format);
+            table.add_row(row![r->"Idx", rFb->"Frequency"]);
+            for (i, entry) in hist.entries.iter().enumerate() {
+                table.add_row(row![r->i,
+                                   rFb->format!("{:.8}", (*entry as f64 / hist.sum as f64))]);
+                if i == TRIM_INDEX {
+                    trimmed = true;
+                    break;
+                }
+            }
+            table.printstd();
+            if trimmed {
+                fmt_indentln(format!("Output trimmed..."));
+            }
+            println!();
+        }
+
+        //
+        // IDAT
+        //
+        {
+            println!("{}({}) {} {} {} {} {} {}",
+                Color::White.underline().paint("IDAT"),
+                self.idat.len(),
+                Color::Purple.paint(format!("Compression method: {}",self.zlib.cmf << 4 >> 4)),
+                Color::Cyan.paint(format!("Compression info: {}",self.zlib.cmf >> 4)),
+                Color::Green.paint(format!("Checksum: {:#07b}", self.zlib.flg << 3 >> 3)),
+                Color::Red.paint(format!("Dict: {:#03b}", self.zlib.flg << 2 >> 7)),
+                Color::Yellow.paint(format!("Compression level: {:#04b}", self.zlib.flg >> 6)),
+                Color::Fixed(221).paint(format!("Adler: {:#010X}", self.zlib.adler)));
+
+            let mut trimmed = false;
+                let mut table = Table::new();
+            let format = prettytable::format::FormatBuilder::new()
+                .column_separator(' ')
+                .borders(' ')
+                .padding(1, 1)
+                .build();
+            table.set_format(format);
+            table.add_row(row![l->"Idx", l->"Size", l->"Checksum"]);
+
+            for (i, idat) in self.idat.iter().enumerate() {
+                table.add_row(row![r->i,
+                                   rFy->idat.prefix.size,
+                                   rFg->format!("{:#010X}", idat.postfix.checksum)]);
+                if i == TRIM_INDEX {
+                    trimmed = true;
+                    break;
+                }
+            }
+            table.printstd();
+            if trimmed {
+                fmt_indentln(format!("Output trimmed..."));
+            }
+            println!();
+
         }
 
         //
