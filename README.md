@@ -1,4 +1,5 @@
 # Bininfo
+WIP: There is no error handling and no fully supported formats.
 
 ## Resources
 
