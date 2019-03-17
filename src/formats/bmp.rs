@@ -257,7 +257,6 @@ impl Bmp {
                 if i % 16 == 0 {
                     println!("");
                     fmt_indent(format!("{:02X} ", b));
-                    // print!("\n{:#04X} ", b);
                 }
                 else {
                     print!("{:02X} ", b);

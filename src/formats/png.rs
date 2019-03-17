@@ -4,7 +4,7 @@ use failure::{
     Error,
 };
 
-use crate::format::{fmt_indentln, fmt_png_header};
+use crate::format::{fmt_indent, fmt_indentln, fmt_png_header};
 
 pub const PNG_HEADER: &'static [u8; PNG_HEADER_SIZE] = b"\x89PNG\x0D\x0A\x1A\x0A";
 pub const PNG_HEADER_SIZE: usize = 8;
@@ -309,6 +309,16 @@ enum tRNS {
 }
 
 #[derive(Debug)]
+#[repr(C)]
+struct Ztxt {
+    prefix:      Prefix,
+    keyword:     String,
+    comp_method: u8,
+    comp_text:   Vec<u8>,
+    postfix:     Postfix,
+}
+
+#[derive(Debug)]
 pub struct Png {
     //
     // Critical chunks
@@ -330,6 +340,7 @@ pub struct Png {
     text: Vec<Text>,
     time: Option<Time>,
     trns: Option<Trns>,
+    ztxt: Vec<Ztxt>,
 }
 
 impl Png {
@@ -358,6 +369,7 @@ impl Png {
         let mut text = Vec::new();
         let mut time = None;
         let mut trns = None;
+        let mut ztxt = Vec::new();
 
         let ihdr: Ihdr = buf.pread_with(PNG_HEADER_SIZE, scroll::BE)?;
 
@@ -531,6 +543,22 @@ impl Png {
                         postfix: buf.pread_with(index + size + 8, scroll::BE)?,
                     });
                 },
+                "zTXt" => {
+                    let keyword = buf.pread::<&str>(index + 8)?.to_string();
+                    let comp_text = buf[index + 10 + keyword.len()..index + size + 8].to_vec();
+                    let comp_method: u8 = buf.pread(index + 9 + keyword.len())?;
+
+                    let ztxt_chunk = Ztxt {
+                        prefix: buf.pread_with(index, scroll::BE)?,
+                        keyword,
+                        comp_method,
+                        comp_text,
+                        postfix: buf.pread_with(index + size + 8, scroll::BE)?,
+                    };
+
+                    ztxt.push(ztxt_chunk);
+
+                },
                 _ => (),
             }
 
@@ -585,6 +613,7 @@ impl Png {
             text,
             time,
             trns,
+            ztxt,
         })
 
     }
@@ -888,6 +917,29 @@ impl Png {
             }
             println!();
         }
+
+        //
+        // zTXt
+        //
+        if self.ztxt.len() > 0 {
+            for (_i, chunk) in self.ztxt.iter().enumerate() {
+                fmt_png_header("zTXt", &chunk.prefix, &chunk.postfix);
+                fmt_indentln(format!("Compression method: {}", chunk.comp_method));
+                fmt_indent(format!("{}: ", chunk.keyword));
+                for (i, b) in chunk.comp_text.iter().enumerate() {
+                    if i % 16 == 0 {
+                        println!("");
+                        fmt_indent(format!("{:02X} ", b));
+                    }
+                    else {
+                        print!("{:02X} ", b);
+                    }
+                }
+                println!();
+            }
+            println!();
+        }
+
 
         //
         // IDAT
