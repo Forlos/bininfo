@@ -17,7 +17,7 @@ const TRIM_INDEX: usize = 20;
 #[repr(C)]
 pub struct Prefix {
     pub size: u32,
-    id:   u32,
+    id:       u32,
 }
 
 #[derive(Debug, Pread)]
@@ -32,6 +32,14 @@ struct RGB {
     red:     u8,
     green:   u8,
     blue:    u8,
+}
+
+#[derive(Debug, Pread)]
+#[repr(C)]
+struct RGB_16 {
+    red:     u16,
+    green:   u16,
+    blue:    u16,
 }
 
 #[derive(Debug, Pread)]
@@ -266,6 +274,41 @@ struct Time {
 }
 
 #[derive(Debug)]
+#[repr(C)]
+struct Trns {
+    prefix:  Prefix,
+    data:    tRNS,
+    postfix: Postfix,
+}
+
+#[derive(Debug, Pread)]
+#[repr(C)]
+struct Trns0 {
+    gray: u16,
+}
+
+#[derive(Debug, Pread)]
+#[repr(C)]
+struct Trns2 {
+    rgb: RGB_16,
+}
+
+#[derive(Debug)]
+#[repr(C)]
+struct Trns3 {
+    alpha: Vec<u8>,
+}
+
+#[derive(Debug)]
+#[repr(C)]
+#[allow(non_camel_case_types)]
+enum tRNS {
+    tRNS0(Trns0),
+    tRNS2(Trns2),
+    tRNS3(Trns3),
+}
+
+#[derive(Debug)]
 pub struct Png {
     //
     // Critical chunks
@@ -286,6 +329,7 @@ pub struct Png {
     sbit: Option<Sbit>,
     text: Vec<Text>,
     time: Option<Time>,
+    trns: Option<Trns>,
 }
 
 impl Png {
@@ -313,6 +357,7 @@ impl Png {
         let mut sbit = None;
         let mut text = Vec::new();
         let mut time = None;
+        let mut trns = None;
 
         let ihdr: Ihdr = buf.pread_with(PNG_HEADER_SIZE, scroll::BE)?;
 
@@ -458,6 +503,34 @@ impl Png {
                 "tIME" => {
                     time = Some(buf.pread_with(index, scroll::BE)?);
                 },
+                "tRNS" => {
+                    let prefix = buf.pread_with::<Prefix>(index, scroll::BE)?;
+                    let color_type = ihdr.color;
+                    let data;
+                    match color_type {
+                        0 => {
+                            data = tRNS::tRNS0(buf.pread_with(index + 8, scroll::BE)?);
+                        },
+                        2 => {
+                            data = tRNS::tRNS2(buf.pread_with(index + 8, scroll::BE)?);
+                        },
+                        3 => {
+                            let mut alpha = Vec::with_capacity(prefix.size as usize);
+                            for i in 0..alpha.capacity() {
+                                alpha.push(buf[index + 8 + i]);
+                            }
+                            data = tRNS::tRNS3(Trns3{ alpha });
+                        },
+                        _ => {
+                            panic!("Invalid color type for tRNS");
+                        },
+                    }
+                    trns = Some(Trns {
+                        prefix,
+                        data,
+                        postfix: buf.pread_with(index + size + 8, scroll::BE)?,
+                    });
+                },
                 _ => (),
             }
 
@@ -511,6 +584,7 @@ impl Png {
             sbit,
             text,
             time,
+            trns,
         })
 
     }
@@ -769,6 +843,49 @@ impl Png {
                                  time.hour,
                                  time.minute,
                                  time.second));
+            println!();
+        }
+        //
+        // tRNS
+        //
+        if let Some(trns) = &self.trns {
+            fmt_png_header("tRNS", &trns.prefix, &trns.postfix);
+            match &trns.data {
+                tRNS::tRNS0(data) => {
+                    fmt_indentln(format!("Gray: {:#06X}", data.gray));
+                },
+                tRNS::tRNS2(data) => {
+                    fmt_indentln(format!("Red:   {}",
+                        Color::Red.paint(format!("{:#06X}", data.rgb.red))));
+                    fmt_indentln(format!("Green: {}",
+                        Color::Green.paint(format!("{:#06X}", data.rgb.green))));
+                    fmt_indentln(format!("Blue:  {}",
+                        Color::Blue.paint(format!("{:#06X}", data.rgb.blue))));
+                },
+                tRNS::tRNS3(data) => {
+                    let mut trimmed = false;
+                    let mut table = Table::new();
+                    let format = prettytable::format::FormatBuilder::new()
+                        .column_separator(' ')
+                        .borders(' ')
+                        .padding(1, 1)
+                        .build();
+                    table.set_format(format);
+                    table.add_row(row![r->"Idx", rFw->"Transparency"]);
+                    for (i, entry) in data.alpha.iter().enumerate() {
+                        table.add_row(row![r->i,
+                                           rFw->format!("{:#04X}", entry)]);
+                        if i == TRIM_INDEX {
+                            trimmed = true;
+                            break;
+                        }
+                    }
+                    table.printstd();
+                    if trimmed {
+                        fmt_indentln(format!("Output trimmed..."));
+                    }
+                },
+            }
             println!();
         }
 
