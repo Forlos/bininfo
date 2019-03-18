@@ -384,6 +384,16 @@ enum sPLT {
     sPLT16(Splt16),
 }
 
+#[derive(Debug, Pread)]
+#[repr(C)]
+struct Offs {
+    prefix:  Prefix,
+    x:       i32,
+    y:       i32,
+    unit:    u8,
+    postfix: Postfix,
+}
+
 #[derive(Debug)]
 pub struct Png {
     //
@@ -411,6 +421,16 @@ pub struct Png {
     iccp: Option<Iccp>,
     itxt: Vec<Itxt>,
     splt: Vec<Splt>,
+    //
+    // PNGEXT 1.2 chunks https://pmt.sourceforge.io/specs/pngext-1.2.0-pdg-h20.html
+    //
+    offs: Option<Offs>,
+    // pcal: Option<Pcal>,
+    // scal: Option<Scal>,
+    // gifg: Vec<Gifg>,
+    // gift: Vec<Gift>,
+    // gifx: Vec<Gifx>,
+    // frac: Vec<Frac>,
 }
 
 impl Png {
@@ -444,6 +464,18 @@ impl Png {
         let mut iccp = None;
         let mut itxt = Vec::new();
         let mut splt = Vec::new();
+
+
+        //
+        // PNGEXT 1.2 chunks https://pmt.sourceforge.io/specs/pngext-1.2.0-pdg-h20.html
+        //
+        let mut offs = None;
+        // let mut pcal = None;
+        // let mut scal = None;
+        // let mut gifg = Vec::new();
+        // let mut gift = Vec::new();
+        // let mut gifx = Vec::new();
+        // let mut frac = Vec::new();
 
         let ihdr: Ihdr = buf.pread_with(PNG_HEADER_SIZE, scroll::BE)?;
 
@@ -723,6 +755,9 @@ impl Png {
 
                     splt.push(splt_chunk);
 
+                },
+                "oFFs" => {
+                    offs = Some(buf.pread_with(index, scroll::BE)?);
                 }
                 _ => (),
             }
@@ -783,6 +818,14 @@ impl Png {
             iccp,
             itxt,
             splt,
+
+            offs,
+            // pcal,
+            // scal,
+            // gifg,
+            // gift,
+            // gifx,
+            // frac,
         })
 
     }
@@ -1253,6 +1296,15 @@ impl Png {
                 fmt_indentln(format!("Output trimmed..."));
             }
             println!();
+        }
+        //
+        // oFFs
+        //
+        if let Some(offs) = &self.offs {
+            fmt_png_header("oFFs", &offs.prefix, &offs.postfix);
+            fmt_indentln(format!("X: {}", offs.x));
+            fmt_indentln(format!("Y: {}", offs.y));
+            fmt_indentln(format!("Unit specifier: {}", offs.unit));
         }
 
         //
