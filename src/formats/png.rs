@@ -397,15 +397,25 @@ struct Offs {
 #[derive(Debug)]
 #[repr(C)]
 struct Pcal {
-    prefix: Prefix,
-    name: String,
-    org_zero: i32,
-    org_max: i32,
-    equation: u8,
+    prefix:           Prefix,
+    name:             String,
+    org_zero:         i32,
+    org_max:          i32,
+    equation:         u8,
     parameters_count: u8,
-    unit_name: String,
-    parameters: Vec<String>,
-    postfix: Postfix,
+    unit_name:        String,
+    parameters:       Vec<String>,
+    postfix:          Postfix,
+}
+
+#[derive(Debug)]
+#[repr(C)]
+struct Scal {
+    prefix:       Prefix,
+    unit:         u8,
+    pixel_width:  String,
+    pixel_height: String,
+    postfix:      Postfix,
 }
 
 #[derive(Debug)]
@@ -440,9 +450,8 @@ pub struct Png {
     //
     offs: Option<Offs>,
     pcal: Option<Pcal>,
-    // scal: Option<Scal>,
+    scal: Option<Scal>,
     // gifg: Vec<Gifg>,
-    // gift: Vec<Gift>,
     // gifx: Vec<Gifx>,
     // frac: Vec<Frac>,
 }
@@ -485,9 +494,8 @@ impl Png {
         //
         let mut offs = None;
         let mut pcal = None;
-        // let mut scal = None;
+        let mut scal = None;
         // let mut gifg = Vec::new();
-        // let mut gift = Vec::new();
         // let mut gifx = Vec::new();
         // let mut frac = Vec::new();
 
@@ -806,6 +814,18 @@ impl Png {
                     });
 
                 },
+                "sCAL" => {
+                    let unit = buf.pread(index + 8)?;
+                    let pixel_width = buf.pread::<&str>(index + 9)?.to_string();
+                    let pixel_height = std::str::from_utf8(&buf[index + 10 + pixel_width.len()..index + size + 8])?.to_string();
+                    scal = Some(Scal {
+                        prefix: buf.pread_with(index, scroll::BE)?,
+                        unit,
+                        pixel_width,
+                        pixel_height,
+                        postfix: buf.pread_with(index + size + 8, scroll::BE)?,
+                    });
+                },
                 _ => (),
             }
 
@@ -868,9 +888,8 @@ impl Png {
 
             offs,
             pcal,
-            // scal,
+            scal,
             // gifg,
-            // gift,
             // gifx,
             // frac,
         })
@@ -1353,7 +1372,9 @@ impl Png {
             fmt_indentln(format!("X: {}", offs.x));
             fmt_indentln(format!("Y: {}", offs.y));
             fmt_indentln(format!("Unit specifier: {}", offs.unit));
+            println!();
         }
+
         //
         // pCAL
         //
@@ -1368,6 +1389,18 @@ impl Png {
             for param in &pcal.parameters {
                 fmt_indentln(format!("{}", param));
             }
+            println!();
+        }
+
+        //
+        // sCAL
+        //
+        if let Some(scal) = &self.scal {
+            fmt_png_header("sCAl", &scal.prefix, &scal.postfix);
+            fmt_indentln(format!("Unit specifier: {}", scal.unit));
+            fmt_indentln(format!("Pixel width: {}", scal.pixel_width));
+            fmt_indentln(format!("Pixel height: {}", scal.pixel_height));
+            println!();
         }
 
         //
