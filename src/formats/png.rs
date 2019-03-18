@@ -318,6 +318,14 @@ struct Ztxt {
     postfix:     Postfix,
 }
 
+#[derive(Debug, Pread)]
+#[repr(C)]
+struct Srgb {
+    prefix:    Prefix,
+    rendering: u8,
+    postfix:   Postfix,
+}
+
 #[derive(Debug)]
 pub struct Png {
     //
@@ -341,6 +349,7 @@ pub struct Png {
     time: Option<Time>,
     trns: Option<Trns>,
     ztxt: Vec<Ztxt>,
+    srgb: Option<Srgb>,
 }
 
 impl Png {
@@ -370,6 +379,7 @@ impl Png {
         let mut time = None;
         let mut trns = None;
         let mut ztxt = Vec::new();
+        let mut srgb = None;
 
         let ihdr: Ihdr = buf.pread_with(PNG_HEADER_SIZE, scroll::BE)?;
 
@@ -559,6 +569,9 @@ impl Png {
                     ztxt.push(ztxt_chunk);
 
                 },
+                "sRGB" => {
+                    srgb = Some(buf.pread_with(index, scroll::BE)?);
+                },
                 _ => (),
             }
 
@@ -614,6 +627,7 @@ impl Png {
             time,
             trns,
             ztxt,
+            srgb,
         })
 
     }
@@ -743,6 +757,7 @@ impl Png {
                                  format!("{:.5}", gama.gamma as f32 / 100000.0)));
             println!();
         }
+
         //
         // hIST
         //
@@ -939,6 +954,34 @@ impl Png {
             }
             println!();
         }
+
+        //
+        // sRGB
+        //
+        if let Some(srgb) = &self.srgb {
+            fmt_png_header("sRGB", &srgb.prefix, &srgb.postfix);
+            fmt_indent(format!("Rendering intent: "));
+            match srgb.rendering {
+                0 => {
+                    println!("{} Perceptual", srgb.rendering);
+                }
+                1 => {
+                    println!("{} Relative colorimetric", srgb.rendering);
+                }
+                2 => {
+                    println!("{} Saturation", srgb.rendering);
+                }
+                3 => {
+                    println!("{} Absolute colorimetric", srgb.rendering);
+                }
+                _ => {
+                    panic!("Invalid rendering intent");
+                }
+
+            }
+            println!();
+        }
+
 
 
         //
