@@ -327,6 +327,30 @@ struct Srgb {
 }
 
 #[derive(Debug)]
+#[repr(C)]
+struct Iccp {
+    prefix:       Prefix,
+    profile:      String,
+    comp_method:  u8,
+    comp_profile: Vec<u8>,
+    postfix:      Postfix,
+}
+
+
+#[derive(Debug)]
+#[repr(C)]
+struct Itxt {
+    prefix:        Prefix,
+    keyword:       String,
+    comp_flag:     u8,
+    comp_method:   u8,
+    lang_tag:      String,
+    trans_keyword: String,
+    comp_text:     Vec<u8>,
+    postfix:       Postfix,
+}
+
+#[derive(Debug)]
 pub struct Png {
     //
     // Critical chunks
@@ -350,6 +374,8 @@ pub struct Png {
     trns: Option<Trns>,
     ztxt: Vec<Ztxt>,
     srgb: Option<Srgb>,
+    iccp: Option<Iccp>,
+    itxt: Vec<Itxt>,
 }
 
 impl Png {
@@ -380,6 +406,8 @@ impl Png {
         let mut trns = None;
         let mut ztxt = Vec::new();
         let mut srgb = None;
+        let mut iccp = None;
+        let mut itxt = Vec::new();
 
         let ihdr: Ihdr = buf.pread_with(PNG_HEADER_SIZE, scroll::BE)?;
 
@@ -572,6 +600,47 @@ impl Png {
                 "sRGB" => {
                     srgb = Some(buf.pread_with(index, scroll::BE)?);
                 },
+                "iCCP" => {
+                    let profile = buf.pread::<&str>(index + 8)?.to_string();
+                    let comp_profile = buf[index + 10 + profile.len()..index + size + 8].to_vec();
+                    let comp_method: u8 = buf.pread(index + 9 + profile.len())?;
+
+                    iccp = Some(Iccp {
+                        prefix: buf.pread_with(index, scroll::BE)?,
+                        profile,
+                        comp_method,
+                        comp_profile,
+                        postfix: buf.pread_with(index + size + 8, scroll::BE)?,
+                    });
+
+                },
+                "iTXt" => {
+                    let keyword     = buf.pread::<&str>(index + 8)?.to_string();
+                    let comp_flag   = buf.pread(index + 9 + keyword.len())?;
+                    let comp_method = buf.pread(index + 10 + keyword.len())?;
+
+                    let lang_tag = buf.pread::<&str>(index + 11 + keyword.len())?.to_string();
+                    let trans_keyword = buf.pread::<&str>(
+                            index + 12 + keyword.len() + lang_tag.len())?.to_string();
+                    let comp_text =
+                        buf[index + 13 + keyword.len() + lang_tag.len() + trans_keyword.len()
+                            ..index + size + 8].to_vec();
+
+
+                    let itxt_chunk = Itxt {
+                        prefix: buf.pread_with(index, scroll::BE)?,
+                        keyword,
+                        comp_flag,
+                        comp_method,
+                        lang_tag,
+                        trans_keyword,
+                        comp_text,
+                        postfix: buf.pread_with(index + size + 8, scroll::BE)?,
+                    };
+
+                    itxt.push(itxt_chunk);
+
+                },
                 _ => (),
             }
 
@@ -628,6 +697,8 @@ impl Png {
             trns,
             ztxt,
             srgb,
+            iccp,
+            itxt,
         })
 
     }
@@ -870,7 +941,8 @@ impl Png {
         if self.text.len() > 0 {
             for (_i, chunk) in self.text.iter().enumerate() {
                 fmt_png_header("tEXt", &chunk.prefix, &chunk.postfix);
-                fmt_indentln(format!("{}: {}", chunk.keyword, chunk.text));
+                fmt_indentln(format!("{}: {}",
+                                     Color::Blue.paint(&chunk.keyword), chunk.text));
             }
             println!();
         }
@@ -981,8 +1053,60 @@ impl Png {
             }
             println!();
         }
+        //
+        // iCCP
+        //
+        if let Some(iccp) = &self.iccp {
+            fmt_png_header("iCCP", &iccp.prefix, &iccp.postfix);
+            fmt_indentln(format!("Compression method: {}", iccp.comp_method));
+            fmt_indent(format!("{}: ", iccp.profile));
+            for (i, b) in iccp.comp_profile.iter().enumerate() {
+                if i % 16 == 0 {
+                    println!("");
+                    fmt_indent(format!("{:02X} ", b));
+                }
+                else {
+                    print!("{:02X} ", b);
+                }
+                println!();
+            }
+            println!();
+        }
+        //
+        // iTXt
+        //
+        if self.itxt.len() > 0 {
+            for (_i, chunk) in self.itxt.iter().enumerate() {
+                fmt_png_header("iTXt", &chunk.prefix, &chunk.postfix);
+                fmt_indentln(format!("Compression flag: {}", chunk.comp_flag));
+                fmt_indentln(format!("Lang: {}",
+                                     Color::Green.paint(&chunk.lang_tag)));
+                fmt_indentln(format!("Keyword: {}",
+                                     Color::Blue.paint(&chunk.keyword)));
+                fmt_indentln(format!("Translated keyword: {}",
+                                     Color::Purple.paint(&chunk.trans_keyword)));
+                if chunk.comp_flag == 1 {
+                    fmt_indentln(format!("Compression method: {}", chunk.comp_method));
 
-
+                    fmt_indent(format!("{}: ", chunk.keyword));
+                    for (i, b) in chunk.comp_text.iter().enumerate() {
+                        if i % 16 == 0 {
+                            println!("");
+                            fmt_indent(format!("{:02X} ", b));
+                        }
+                        else {
+                            print!("{:02X} ", b);
+                        }
+                    }
+                    println!();
+                }
+                else {
+                    fmt_indentln(format!("Text: {}",
+                                         std::str::from_utf8(&chunk.comp_text)?));
+                }
+            }
+            println!();
+        }
 
         //
         // IDAT
