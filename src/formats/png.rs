@@ -351,6 +351,40 @@ struct Itxt {
 }
 
 #[derive(Debug)]
+#[repr(C)]
+struct Splt {
+    prefix:  Prefix,
+    name:    String,
+    depth:   u8,
+    plt:     Vec<sPLT>,
+    postfix: Postfix,
+}
+
+#[derive(Debug, Pread)]
+#[repr(C)]
+struct Splt8 {
+    rgb:   RGB,
+    alpha: u8,
+    freq:  u16,
+}
+
+#[derive(Debug, Pread)]
+#[repr(C)]
+struct Splt16 {
+    rgb:   RGB_16,
+    alpha: u16,
+    freq:  u16,
+}
+
+#[derive(Debug)]
+#[repr(C)]
+#[allow(non_camel_case_types)]
+enum sPLT {
+    sPLT8(Splt8),
+    sPLT16(Splt16),
+}
+
+#[derive(Debug)]
 pub struct Png {
     //
     // Critical chunks
@@ -376,6 +410,7 @@ pub struct Png {
     srgb: Option<Srgb>,
     iccp: Option<Iccp>,
     itxt: Vec<Itxt>,
+    splt: Vec<Splt>,
 }
 
 impl Png {
@@ -408,6 +443,7 @@ impl Png {
         let mut srgb = None;
         let mut iccp = None;
         let mut itxt = Vec::new();
+        let mut splt = Vec::new();
 
         let ihdr: Ihdr = buf.pread_with(PNG_HEADER_SIZE, scroll::BE)?;
 
@@ -641,6 +677,53 @@ impl Png {
                     itxt.push(itxt_chunk);
 
                 },
+                "sPLT" => {
+                    let prefix = buf.pread_with::<Prefix>(index, scroll::BE)?;
+                    let name   = buf.pread::<&str>(index + 8)?.to_string();
+                    let depth  = buf.pread(index + 9 + name.len())?;
+
+                    let length = prefix.size as usize - name.len() - 2;
+                    let mut plt;
+
+                    match depth {
+
+                        8 => {
+                            if length % 6 != 0 {
+                                panic!("sPLT remaining length not divisible by 6");
+                            }
+                            plt = Vec::with_capacity(length / 6);
+                            for _ in 0..length / 6 {
+                                plt.push(sPLT::sPLT8(buf.pread_with::<Splt8>
+                                         (index + 10 + name.len(), scroll::BE)?));
+                            }
+                        },
+                        16 => {
+                            if length % 10 != 0 {
+                                panic!("sPLT remaining length not divisible by 10");
+                            }
+                            plt = Vec::with_capacity(length / 10);
+                            for _ in 0..length / 6 {
+                                plt.push(sPLT::sPLT16(buf.pread_with::<Splt16>
+                                        (index + 10 + name.len(), scroll::BE)?));
+                            }
+                        },
+                        _ => {
+                            panic!("Invalid bit depth for sPLT");
+                        },
+
+                    }
+
+                    let splt_chunk = Splt {
+                        prefix,
+                        name,
+                        depth,
+                        plt,
+                        postfix: buf.pread_with(index + size + 8, scroll::BE)?,
+                    };
+
+                    splt.push(splt_chunk);
+
+                }
                 _ => (),
             }
 
@@ -699,6 +782,7 @@ impl Png {
             srgb,
             iccp,
             itxt,
+            splt,
         })
 
     }
@@ -1107,6 +1191,69 @@ impl Png {
             }
             println!();
         }
+        //
+        // sPLT
+        //
+        if self.splt.len() > 0 {
+            println!("{}({}) ",Color::White.underline().paint("sPLT"),
+                     self.splt.len(),);
+
+            let mut trimmed = false;
+            let mut table = Table::new();
+            let format = prettytable::format::FormatBuilder::new()
+                .column_separator(' ')
+                .borders(' ')
+                .padding(1, 1)
+                .build();
+            table.set_format(format);
+            table.add_row(row!["Idx", "Depth",
+                               Fr->"Red", Fg->"Green", Fb->"Blue",
+                               Fw->"Alpha", "Freq"]);
+            for (i, chunk) in self.splt.iter().enumerate() {
+                fmt_png_header("sPLT", &chunk.prefix, &chunk.postfix);
+                fmt_indentln(format!("Name: {}",
+                                     Color::Blue.paint(&chunk.name)));
+                for (j, palette) in chunk.plt.iter().enumerate() {
+                    match palette {
+                        sPLT::sPLT8(plt) => {
+                            table.add_row(row![r->j,
+                                               r->chunk.depth,
+                                               rFr->plt.rgb.red,
+                                               rFg->plt.rgb.green,
+                                               rFb->plt.rgb.blue,
+                                               rFw->plt.alpha,
+                                               r->plt.freq]);
+                            if j == TRIM_INDEX {
+                                trimmed = true;
+                                break;
+                            }
+                        },
+                        sPLT::sPLT16(plt) => {
+                            table.add_row(row![r->j,
+                                               r->chunk.depth,
+                                               rFr->plt.rgb.red,
+                                               rFg->plt.rgb.green,
+                                               rFb->plt.rgb.blue,
+                                               rFw->plt.alpha,
+                                               r->plt.freq]);
+                            if j == TRIM_INDEX {
+                                trimmed = true;
+                                break;
+                            }
+                        }
+                    }
+                }
+                if i == TRIM_INDEX {
+                    trimmed = true;
+                    break;
+                }
+            }
+            table.printstd();
+            if trimmed {
+                fmt_indentln(format!("Output trimmed..."));
+            }
+            println!();
+        }
 
         //
         // IDAT
@@ -1123,7 +1270,7 @@ impl Png {
                 Color::Fixed(221).paint(format!("Adler: {:#010X}", self.zlib.adler)));
 
             let mut trimmed = false;
-                let mut table = Table::new();
+            let mut table = Table::new();
             let format = prettytable::format::FormatBuilder::new()
                 .column_separator(' ')
                 .borders(' ')
