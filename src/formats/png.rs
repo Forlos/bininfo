@@ -390,7 +390,21 @@ struct Offs {
     prefix:  Prefix,
     x:       i32,
     y:       i32,
-    unit:    u8,
+    unit:    i8,
+    postfix: Postfix,
+}
+
+#[derive(Debug)]
+#[repr(C)]
+struct Pcal {
+    prefix: Prefix,
+    name: String,
+    org_zero: i32,
+    org_max: i32,
+    equation: u8,
+    parameters_count: u8,
+    unit_name: String,
+    parameters: Vec<String>,
     postfix: Postfix,
 }
 
@@ -425,7 +439,7 @@ pub struct Png {
     // PNGEXT 1.2 chunks https://pmt.sourceforge.io/specs/pngext-1.2.0-pdg-h20.html
     //
     offs: Option<Offs>,
-    // pcal: Option<Pcal>,
+    pcal: Option<Pcal>,
     // scal: Option<Scal>,
     // gifg: Vec<Gifg>,
     // gift: Vec<Gift>,
@@ -470,7 +484,7 @@ impl Png {
         // PNGEXT 1.2 chunks https://pmt.sourceforge.io/specs/pngext-1.2.0-pdg-h20.html
         //
         let mut offs = None;
-        // let mut pcal = None;
+        let mut pcal = None;
         // let mut scal = None;
         // let mut gifg = Vec::new();
         // let mut gift = Vec::new();
@@ -758,7 +772,40 @@ impl Png {
                 },
                 "oFFs" => {
                     offs = Some(buf.pread_with(index, scroll::BE)?);
-                }
+                },
+                "pCAL" => {
+                    let prefix   = buf.pread_with::<Prefix>(index, scroll::BE)?;
+                    let name     = buf.pread::<&str>(index + 8)?.to_string();
+                    let org_zero = buf.pread_with(index + 9 + name.len(), scroll::BE)?;
+                    let org_max  = buf.pread_with(index + 13 + name.len(), scroll::BE)?;
+                    let equation = buf.pread_with(index + 17 + name.len(), scroll::BE)?;
+                    let parameters_count = buf.pread_with::<u8>(index + 18 + name.len(), scroll::BE)?;
+                    let unit_name = buf.pread::<&str>(index + 19 + name.len())?.to_string();
+                    let mut parameters = Vec::with_capacity(parameters_count as usize);
+
+                    let mut param_length = 0;
+
+                    for _ in 0..parameters_count - 1 {
+                        let parameter = buf.pread::<&str>(index + 20 + name.len() + unit_name.len())?.to_string();
+                        param_length += parameter.len() + 1;
+                        parameters.push(parameter);
+                    }
+                    let parameter = std::str::from_utf8(&buf[index + 20 + name.len() + unit_name.len() + param_length..index + size + 8])?.to_string();
+                    parameters.push(parameter);
+
+                    pcal = Some(Pcal {
+                        prefix,
+                        name,
+                        org_zero,
+                        org_max,
+                        equation,
+                        parameters_count,
+                        unit_name,
+                        parameters,
+                        postfix: buf.pread_with(index + size + 8, scroll::BE)?,
+                    });
+
+                },
                 _ => (),
             }
 
@@ -820,7 +867,7 @@ impl Png {
             splt,
 
             offs,
-            // pcal,
+            pcal,
             // scal,
             // gifg,
             // gift,
@@ -1195,8 +1242,8 @@ impl Png {
                 else {
                     print!("{:02X} ", b);
                 }
-                println!();
             }
+            println!();
             println!();
         }
         //
@@ -1297,6 +1344,7 @@ impl Png {
             }
             println!();
         }
+
         //
         // oFFs
         //
@@ -1305,6 +1353,21 @@ impl Png {
             fmt_indentln(format!("X: {}", offs.x));
             fmt_indentln(format!("Y: {}", offs.y));
             fmt_indentln(format!("Unit specifier: {}", offs.unit));
+        }
+        //
+        // pCAL
+        //
+        if let Some(pcal) = &self.pcal {
+            fmt_png_header("pCAL", &pcal.prefix, &pcal.postfix);
+            fmt_indentln(format!("Name: {}", pcal.name));
+            fmt_indentln(format!("Original zero: {}", pcal.org_zero));
+            fmt_indentln(format!("Original max: {}", pcal.org_max));
+            fmt_indentln(format!("Equation type: {}", pcal.equation));
+            fmt_indentln(format!("Unit name: {}", pcal.unit_name));
+            fmt_indentln(format!("Number of parameters: {}", pcal.parameters_count));
+            for param in &pcal.parameters {
+                fmt_indentln(format!("{}", param));
+            }
         }
 
         //
