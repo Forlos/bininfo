@@ -10,9 +10,6 @@ WIP: There is no error handling and no fully supported formats.
 - [ ] PDF
 - [ ] ELF
 - [ ] PE
-- [ ] MP3
-- [ ] MP4
-
 
 ## Resources
 

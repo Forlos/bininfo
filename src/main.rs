@@ -73,6 +73,9 @@ fn run(file_path: &str) -> Result<(), Error> {
         Binary::Png(png) => {
             png.print()?;
         },
+        Binary::Elf(elf) => {
+            elf.print()?;
+        }
         Binary::Unknown  => (),
     }
 

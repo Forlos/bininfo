@@ -887,7 +887,9 @@ impl Png {
                     ster = Some(buf.pread_with(index, scroll::BE)?);
                 }
                 _ => {
-                    eprintln!("Unsupported chunk: {}", s);
+                    use ansi_term::Color;
+                    eprintln!("Error: {} ",
+                              Color::Red.underline().paint(format!("Unsupported chunk: {}", s)));
                 },
             }
 

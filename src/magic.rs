@@ -5,6 +5,7 @@ const MAGIC_SIZE: usize = 16;
 pub enum Format {
     Png,
     Bmp,
+    Elf,
     Unknown,
 }
 
@@ -30,6 +31,9 @@ fn check_magic(magic: &[u8; MAGIC_SIZE]) -> std::io::Result<Format> {
     }
     else if &magic[0..bmp::BMP_MAGIC_SIZE] == bmp::BMP_MAGIC {
         Ok(Format::Bmp)
+    }
+    else if &magic[0..elf::ELF_MAGIC_SIZE] == elf::ELF_MAGIC {
+        Ok(Format::Elf)
     }
     else {
         Ok(Format::Unknown)
