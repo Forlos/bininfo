@@ -418,6 +418,34 @@ struct Scal {
     postfix:      Postfix,
 }
 
+#[derive(Debug, Pread)]
+#[repr(C)]
+struct Gifg {
+    prefix:     Prefix,
+    disposal:   u8,
+    user_input: u8,
+    delay:      u16,
+    postfix:    Postfix,
+}
+
+#[derive(Debug)]
+#[repr(C)]
+struct Gifx {
+    prefix:   Prefix,
+    app_id:   [u8; 8],
+    app_code: [u8; 3],
+    app_data: Vec<u8>,
+    postfix:  Postfix,
+}
+
+#[derive(Debug, Pread)]
+#[repr(C)]
+struct Ster {
+    prefix:   Prefix,
+    mode: u8,
+    postfix:  Postfix,
+}
+
 #[derive(Debug)]
 pub struct Png {
     //
@@ -451,9 +479,13 @@ pub struct Png {
     offs: Option<Offs>,
     pcal: Option<Pcal>,
     scal: Option<Scal>,
-    // gifg: Vec<Gifg>,
-    // gifx: Vec<Gifx>,
+    gifg: Vec<Gifg>,
+    gifx: Vec<Gifx>,
     // frac: Vec<Frac>,
+    //
+    // PNGEXT 1.3 chunks
+    //
+    ster: Option<Ster>,
 }
 
 impl Png {
@@ -461,13 +493,13 @@ impl Png {
     pub fn parse(buf: &[u8]) -> Result<Self, Error> {
 
         const CHUNK_SIZE: usize = 12;
+        let mut data = Vec::new();
 
         //
         // Critical chunks
         //
         let mut plte = None;
         let mut idat = Vec::new();
-        let mut data = Vec::new();
         let mut iend = None;
 
         //
@@ -495,9 +527,14 @@ impl Png {
         let mut offs = None;
         let mut pcal = None;
         let mut scal = None;
-        // let mut gifg = Vec::new();
-        // let mut gifx = Vec::new();
+        let mut gifg = Vec::new();
+        let mut gifx = Vec::new();
         // let mut frac = Vec::new();
+
+        //
+        // PNGEXT 1.3 chunks
+        //
+        let mut ster = None;
 
         let ihdr: Ihdr = buf.pread_with(PNG_HEADER_SIZE, scroll::BE)?;
 
@@ -826,10 +863,33 @@ impl Png {
                         postfix: buf.pread_with(index + size + 8, scroll::BE)?,
                     });
                 },
-                _ => (),
+                "gIFg" => {
+                    let gifg_chunk = buf.pread_with(index, scroll::BE)?;
+                    gifg.push(gifg_chunk);
+                },
+                "gIFx" => {
+                    let prefix = buf.pread_with(index, scroll::BE)?;
+                    let mut app_id = [0; 8];
+                    app_id.copy_from_slice(&buf[index + 8..index + 16]);
+                    let mut app_code = [0; 3];
+                    app_code.copy_from_slice(&buf[index + 16..index + 19]);
+                    let app_data = buf[index + 19..index + size + 8].to_vec();
+                    let gifx_chunk = Gifx {
+                        prefix,
+                        app_id,
+                        app_code,
+                        app_data,
+                        postfix: buf.pread_with(index + size + 8, scroll::BE)?,
+                    };
+                    gifx.push(gifx_chunk);
+                },
+                "sTER" => {
+                    ster = Some(buf.pread_with(index, scroll::BE)?);
+                }
+                _ => {
+                    eprintln!("Unsupported chunk: {}", s);
+                },
             }
-
-            println!("{}", s);
 
             index += size + CHUNK_SIZE;
 
@@ -889,9 +949,11 @@ impl Png {
             offs,
             pcal,
             scal,
-            // gifg,
-            // gifx,
+            gifg,
+            gifx,
             // frac,
+
+            ster,
         })
 
     }
@@ -1401,6 +1463,52 @@ impl Png {
             fmt_indentln(format!("Pixel width: {}", scal.pixel_width));
             fmt_indentln(format!("Pixel height: {}", scal.pixel_height));
             println!();
+        }
+
+        //
+        // gIFg
+        //
+        if self.gifg.len() > 0 {
+            println!("{}({})",Color::White.underline().paint("gIFg"), self.gifg.len());
+            for chunk in &self.gifg {
+                fmt_png_header("gIFg", &chunk.prefix, &chunk.postfix);
+                fmt_indentln(format!("Disposal method: {}", chunk.disposal));
+                fmt_indentln(format!("User input flag: {}", chunk.user_input));
+                fmt_indentln(format!("Delay time: {}", chunk.delay));
+                println!();
+            }
+        }
+
+        //
+        // gIFx
+        //
+        if self.gifx.len() > 0 {
+            println!("{}({})",Color::White.underline().paint("gIFx"), self.gifg.len());
+            for chunk in &self.gifg {
+                fmt_png_header("gIFx", &chunk.prefix, &chunk.postfix);
+                fmt_indentln(format!("Application identifier: {}", chunk.disposal));
+                fmt_indentln(format!("Authentication code: {}", chunk.user_input));
+                fmt_indentln(format!("Application data: {}", chunk.delay));
+                println!();
+            }
+        }
+
+        //
+        // sTER
+        //
+        if let Some(ster) = &self.ster {
+            fmt_png_header("sTER", &ster.prefix, &ster.postfix);
+            match ster.mode {
+                0 => {
+                    fmt_indentln(format!("Mode: {}: {}", ster.mode, "cross-fuse layout"));
+                },
+                1 => {
+                    fmt_indentln(format!("Mode: {}: {}", ster.mode, "diverging-fuse layout"));
+                },
+                _ => {
+                    panic!("Invalid mode {} for sTER chunk", ster.mode);
+                },
+            }
         }
 
         //
