@@ -22,9 +22,9 @@ const ELFCLASS64: u8 = 2;
 // Invalid data encoding.
 // const ELFDATANONE: u8 = 0;
 // 2's complement, little endian.
-const ELFDATA2LSB: u8 = 1;
+pub const ELFDATA2LSB: u8 = 1;
 // 2's complement, big endian.
-const ELFDATA2MSB: u8 = 2;
+pub const ELFDATA2MSB: u8 = 2;
 
 // No file type.
 const ET_NONE: u16 = 0;
@@ -50,6 +50,81 @@ pub fn et_to_str(et: u16) -> &'static str {
         ET_CORE => "CORE",
         ET_NUM  => "NUM",
         _       => "UNKNOWN_ET",
+    }
+}
+
+// Program header table entry unused
+pub const PT_NULL: u32 = 0;
+// Loadable program segment
+pub const PT_LOAD: u32 = 1;
+// Dynamic linking information
+pub const PT_DYNAMIC: u32 = 2;
+// Program interpreter
+pub const PT_INTERP: u32 = 3;
+// Auxiliary information
+pub const PT_NOTE: u32 = 4;
+// Reserved
+pub const PT_SHLIB: u32 = 5;
+// Entry for header table itself
+pub const PT_PHDR: u32 = 6;
+// Thread-local storage segment
+pub const PT_TLS: u32 = 7;
+// Number of defined types
+pub const PT_NUM: u32 = 8;
+// Start of OS-specific
+pub const PT_LOOS: u32 = 0x60000000;
+// GCC .eh_frame_hdr segment
+pub const PT_GNU_EH_FRAME: u32 = 0x6474e550;
+// Indicates stack executability
+pub const PT_GNU_STACK: u32 = 0x6474e551;
+// Read-only after relocation
+pub const PT_GNU_RELRO: u32 = 0x6474e552;
+// Sun Specific segment
+pub const PT_LOSUNW: u32 = 0x6ffffffa;
+// Sun Specific segment
+pub const PT_SUNWBSS: u32 = 0x6ffffffa;
+// Stack segment
+pub const PT_SUNWSTACK: u32 = 0x6ffffffb;
+// End of OS-specific
+pub const PT_HISUNW: u32 = 0x6fffffff;
+// End of OS-specific
+pub const PT_HIOS: u32 = 0x6fffffff;
+// Start of processor-specific
+pub const PT_LOPROC: u32 = 0x70000000;
+// ARM unwind segment
+pub const PT_ARM_EXIDX: u32 = 0x70000001;
+// End of processor-specific
+pub const PT_HIPROC: u32 = 0x7fffffff;
+
+// Segment is executable
+pub const PF_X: u32 = 1 << 0;
+// Segment is writable
+pub const PF_W: u32 = 1 << 1;
+// Segment is readable
+pub const PF_R: u32 = 1 << 2;
+
+pub fn pt_to_str(pt: u32) -> &'static str {
+    match pt {
+        PT_NULL => "PT_NULL",
+        PT_LOAD => "PT_LOAD",
+        PT_DYNAMIC => "PT_DYNAMIC",
+        PT_INTERP => "PT_INTERP",
+        PT_NOTE => "PT_NOTE",
+        PT_SHLIB => "PT_SHLIB",
+        PT_PHDR => "PT_PHDR",
+        PT_TLS => "PT_TLS",
+        PT_NUM => "PT_NUM",
+        PT_LOOS => "PT_LOOS",
+        PT_GNU_EH_FRAME => "PT_GNU_EH_FRAME",
+        PT_GNU_STACK => "PT_GNU_STACK",
+        PT_GNU_RELRO => "PT_GNU_RELRO",
+        PT_SUNWBSS => "PT_SUNWBSS",
+        PT_SUNWSTACK => "PT_SUNWSTACK",
+        PT_HIOS => "PT_HIOS",
+        PT_LOPROC => "PT_LOPROC",
+        PT_HIPROC => "PT_HIPROC",
+        PT_ARM_EXIDX => "PT_ARM_EXIDX",
+        _ => "UNKNOWN_PT",
     }
 }
 
@@ -235,7 +310,7 @@ const SIZE_OF_SECTION_HEADER_64: usize = 6 * 8 + 4 * 4;
 
 pub struct Elf {
     header: Elf_header,
-    // program_headers: Vec<Program_header>,
+    program_headers: Vec<Elf_program_header>,
     // section_headers: Vec<Section_header>,
 }
 
@@ -254,14 +329,30 @@ impl Elf {
             },
         };
         let header;
+        let mut program_headers;
 
         match bit_format {
 
             ELFCLASS32 => {
                 header = Elf_header::from(buf.pread_with::<Elf_header_32>(0, endianness)?);
+                program_headers = Vec::with_capacity(header.e_phnum as usize);
+                for i in 0..header.e_phnum as usize {
+                    let p_head = Elf_program_header::from(
+                        buf.pread_with::<Elf_program_header_32>(
+                            header.e_phoff as usize + i * header.e_phentsize as usize, endianness)?);
+
+                    program_headers.push(p_head);
+                }
             },
             ELFCLASS64 => {
                 header = buf.pread_with::<Elf_header>(0, endianness)?;
+                program_headers = Vec::with_capacity(header.e_phnum as usize);
+                for i in 0..header.e_phnum as usize {
+                    let p_head = buf.pread_with(
+                        header.e_phoff as usize + i * header.e_phentsize as usize, endianness)?;
+
+                    program_headers.push(p_head);
+                }
             },
             _ => {
                 panic!("Invalid EI_CLASS");
@@ -271,17 +362,56 @@ impl Elf {
 
         Ok(Elf {
             header,
+            program_headers,
         })
 
     }
 
     pub fn print(&self) -> Result<(), Error> {
+        use ansi_term::Color;
+        use prettytable::Table;
 
         //
         // ELF file
         //
         fmt_elf(&self.header);
-        println!("{:#X?}", self.header);
+        println!();
+
+        //
+        // Program Headers
+        //
+        println!("{}({})",
+                 Color::White.paint("ProgramHeaders"),
+                 self.program_headers.len());
+        let mut table = Table::new();
+        let format = prettytable::format::FormatBuilder::new()
+            .column_separator(' ')
+            .borders(' ')
+            .padding(1, 1)
+            .build();
+        table.set_format(format);
+        table.add_row(row!["Idx", "Type", "Flags", "Offset", "Vaddr", "Paddr", "Filesz","Memsz", "Align"]);
+        for (i, header) in self.program_headers.iter().enumerate() {
+            use ansi_term::{Color, ANSIString, ANSIStrings};
+            let strings: &[ANSIString<'static>] = &[
+                if header.p_flags & 0x04 != 0 { Color::Fixed(83).paint("R") } else { Color::Fixed(138).paint("-") },
+                if header.p_flags & 0x02 != 0 { Color::Fixed(10).paint("W") } else { Color::Fixed(138).paint("-") },
+                if header.p_flags & 0x01 != 0 { Color::Red.paint("X") } else { Color::Fixed(138).paint("-") },
+            ];
+            table.add_row(row![
+                i,
+                pt_to_str(header.p_type),
+                format!("{}", ANSIStrings(strings)),
+                Fy->format!("{:#X}", header.p_offset),
+                Fr->format!("{:#X}", header.p_vaddr),
+                Fr->format!("{:#X}", header.p_paddr),
+                Fg->format!("{:#X}", header.p_filesz),
+                Fg->format!("{:#X}", header.p_memsz),
+                format!("{:#X}", header.p_align),
+            ]);
+        }
+        table.printstd();
+        println!();
 
         Ok(())
 
