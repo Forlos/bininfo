@@ -1,4 +1,6 @@
 use crate::formats::png::{Prefix, Postfix};
+use failure::Error;
+use scroll::Pread;
 
 pub fn fmt_indent(fmt: String) {
     print!("{:>2}", "");
@@ -20,10 +22,12 @@ pub fn fmt_png_header(name: &'static str, prefix: &Prefix, postfix: &Postfix) {
 }
 
 use crate::formats::elf::{
-    Elf_header,
+    Elf_header, Elf_symbol_header, Elf_section_header,
     ET_REL, ET_EXEC, ET_DYN, ET_CORE,
+    STB_LOCAL, STB_GLOBAL, STB_WEAK,
+    STT_OBJECT, STT_FUNC, STT_SECTION, STT_FILE, STT_GNU_IFUNC,
     ELFDATA2LSB,
-    et_to_str, machine_to_str,
+    et_to_str, machine_to_str, type_to_str, bind_to_str,
 };
 
 pub fn fmt_elf(header: &Elf_header) {
@@ -77,5 +81,61 @@ pub fn fmt_elf_flags(flags: u32) -> String {
         1 => "--X".to_owned(),
         _ => "---".to_owned(),
     }
+
+}
+
+pub fn fmt_elf_sym_table(symtab: &Vec<Elf_symbol_header>, symstr: &Vec<u8>, section_headers: &Vec<Elf_section_header>, sh_strtab: &Vec<u8>) -> Result<(), Error> {
+    use prettytable::{Cell, Row, Table};
+
+    let mut table = Table::new();
+    let format = prettytable::format::FormatBuilder::new()
+        .column_separator(' ')
+        .borders(' ')
+        .padding(1, 1)
+        .build();
+    table.set_format(format);
+    table.add_row(row!["Addr", "Bind", "Type", "Symbol", "Section", "Size", "Other"]);
+    for header in symtab.iter() {
+
+        let bind_cell = {
+            let bind_cell = Cell::new(&format!("{:<8}", bind_to_str(header.st_info >> 4)));
+            match header.st_info >> 4 {
+                STB_LOCAL => bind_cell.style_spec("bBCFD"),
+                STB_GLOBAL => bind_cell.style_spec("bBRFD"),
+                STB_WEAK => bind_cell.style_spec("bBMFD"),
+                _ => bind_cell
+            }
+        };
+        let typ_cell = {
+            let typ_cell = Cell::new(&format!("{:<9}", type_to_str(header.st_info & 0xF)));
+            match header.st_info & 0xF {
+                STT_OBJECT => typ_cell.style_spec("bFY"),
+                STT_FUNC => typ_cell.style_spec("bFR"),
+                STT_GNU_IFUNC => typ_cell.style_spec("bFC"),
+                STT_FILE => typ_cell.style_spec("bFB"),
+                STT_SECTION => typ_cell.style_spec("bFW"),
+                _ => typ_cell
+            }
+        };
+
+        table.add_row(Row::new(vec![
+            Cell::new(&format!("{:>#16X}", header.st_value)).style_spec("Frr"),
+            bind_cell,
+            typ_cell,
+            Cell::new(symstr.pread::<&str>(header.st_name as usize)?).style_spec("Fy"),
+            Cell::new(if (header.st_shndx as usize) < (section_headers.len()) {
+                sh_strtab.pread::<&str>(section_headers[header.st_shndx as usize].sh_name as usize)?
+            }
+                      else {
+                          "ABS"
+                      }),
+            Cell::new(&format!("{:#X}", header.st_size)).style_spec("Fg"),
+            Cell::new(&format!("{:#X}", header.st_other)),
+        ]));
+    }
+    table.printstd();
+    println!();
+
+    Ok(())
 
 }

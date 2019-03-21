@@ -8,7 +8,7 @@ use failure::{
     Error,
 };
 
-use crate::format::{fmt_elf};
+use crate::format::{fmt_elf, fmt_elf_sym_table,};
 
 pub const ELF_MAGIC: &'static [u8; ELF_MAGIC_SIZE] = b"\x7FELF";
 pub const ELF_MAGIC_SIZE: usize = 4;
@@ -336,11 +336,11 @@ pub fn shf_to_str(shf: u32) -> &'static str {
 
 // === Sym bindings ===
 // Local symbol.
-const STB_LOCAL: u8 = 0;
+pub const STB_LOCAL: u8 = 0;
 // Global symbol.
-const STB_GLOBAL: u8 = 1;
+pub const STB_GLOBAL: u8 = 1;
 // Weak symbol.
-const STB_WEAK: u8 = 2;
+pub const STB_WEAK: u8 = 2;
 // Number of defined types..
 const STB_NUM: u8 = 3;
 // Start of OS-specific.
@@ -358,13 +358,13 @@ const STB_HIPROC: u8 = 15;
 // Symbol type is unspecified.
 const STT_NOTYPE: u8 = 0;
 // Symbol is a data object.
-const STT_OBJECT: u8 = 1;
+pub const STT_OBJECT: u8 = 1;
 // Symbol is a code object.
-const STT_FUNC: u8 = 2;
+pub const STT_FUNC: u8 = 2;
 // Symbol associated with a section.
-const STT_SECTION: u8 = 3;
+pub const STT_SECTION: u8 = 3;
 // Symbol's name is file name.
-const STT_FILE: u8 = 4;
+pub const STT_FILE: u8 = 4;
 // Symbol is a common data object.
 const STT_COMMON: u8 = 5;
 // Symbol is thread-local data object.
@@ -374,7 +374,7 @@ const STT_NUM: u8 = 7;
 // Start of OS-specific.
 const STT_LOOS: u8 = 10;
 // Symbol is indirect code object.
-const STT_GNU_IFUNC: u8 = 10;
+pub const STT_GNU_IFUNC: u8 = 10;
 // End of OS-specific.
 const STT_HIOS: u8 = 12;
 // Start of processor-specific.
@@ -553,17 +553,17 @@ struct Elf_section_header_32 {
 
 #[derive(Debug, Pread)]
 #[repr(C)]
-struct Elf_section_header {
-    sh_name:      u32,
-    sh_type:      u32,
-    sh_flags:     u64,
-    sh_addr:      u64,
-    sh_offset:    u64,
-    sh_size:      u64,
-    sh_link:      u32,
-    sh_info:      u32,
-    sh_addralign: u64,
-    sh_entsize:   u64,
+pub struct Elf_section_header {
+    pub sh_name:      u32,
+    pub sh_type:      u32,
+    pub sh_flags:     u64,
+    pub sh_addr:      u64,
+    pub sh_offset:    u64,
+    pub sh_size:      u64,
+    pub sh_link:      u32,
+    pub sh_info:      u32,
+    pub sh_addralign: u64,
+    pub sh_entsize:   u64,
 }
 
 impl From<Elf_section_header_32> for Elf_section_header {
@@ -600,13 +600,13 @@ struct Elf_symbol_header_32 {
 
 #[derive(Debug, Pread)]
 #[repr(C)]
-struct Elf_symbol_header {
-    st_name: u32,
-    st_info: u8,
-    st_other: u8,
-    st_shndx: u16,
-    st_value: u64,
-    st_size: u64,
+pub struct Elf_symbol_header {
+    pub st_name: u32,
+    pub st_info: u8,
+    pub st_other: u8,
+    pub st_shndx: u16,
+    pub st_value: u64,
+    pub st_size: u64,
 }
 
 impl From<Elf_symbol_header_32> for Elf_symbol_header {
@@ -636,7 +636,8 @@ pub struct Elf {
     sh_strtab:       Vec<u8>,
     symtab:          Vec<Elf_symbol_header>,
     symstr:          Vec<u8>,
-    // dynsym:          Vec<Elf_symbol_header>,
+    dynsym:          Vec<Elf_symbol_header>,
+    dynstr:          Vec<u8>,
 }
 
 impl Elf {
@@ -658,6 +659,8 @@ impl Elf {
         let mut sh_strtab;
         let mut symtab = Vec::new();
         let mut symstr = Vec::new();
+        let mut dynsym = Vec::new();
+        let mut dynstr = Vec::new();
 
         match bit_format {
 
@@ -696,6 +699,15 @@ impl Elf {
                         let _symstr = &section_headers[head.sh_link as usize];
                         symstr = buf[_symstr.sh_offset as usize.._symstr.sh_offset as usize + _symstr.sh_size as usize].to_vec();
                     }
+                    if head.sh_type == SHT_DYNSYM {
+                        let size = head.sh_size as usize / head.sh_entsize as usize;
+                        dynsym = Vec::with_capacity(size);
+                        for i in 0..size {
+                            dynsym.push(Elf_symbol_header::from(buf.pread_with::<Elf_symbol_header_32>(head.sh_offset as usize + i * head.sh_entsize as usize, endianness)?));
+                        }
+                        let _dynstr = &section_headers[head.sh_link as usize];
+                        dynstr = buf[_dynstr.sh_offset as usize.._dynstr.sh_offset as usize + _dynstr.sh_size as usize].to_vec();
+                    }
                 }
 
             },
@@ -732,6 +744,15 @@ impl Elf {
                         let _symstr = &section_headers[head.sh_link as usize];
                         symstr = buf[_symstr.sh_offset as usize.._symstr.sh_offset as usize + _symstr.sh_size as usize].to_vec();
                     }
+                    if head.sh_type == SHT_DYNSYM {
+                        let size = head.sh_size as usize / head.sh_entsize as usize;
+                        dynsym = Vec::with_capacity(size);
+                        for i in 0..size {
+                            dynsym.push(buf.pread_with::<Elf_symbol_header>(head.sh_offset as usize + i * head.sh_entsize as usize, endianness)?);
+                        }
+                        let _dynstr = &section_headers[head.sh_link as usize];
+                        dynstr = buf[_dynstr.sh_offset as usize.._dynstr.sh_offset as usize + _dynstr.sh_size as usize].to_vec();
+                    }
                 }
 
             },
@@ -748,6 +769,8 @@ impl Elf {
             sh_strtab,
             symtab,
             symstr,
+            dynsym,
+            dynstr,
         })
 
     }
@@ -854,54 +877,15 @@ impl Elf {
         println!("{}({})",
                  Color::White.paint("SymbolTable"),
                  self.symtab.len());
-        let mut table = Table::new();
-        let format = prettytable::format::FormatBuilder::new()
-            .column_separator(' ')
-            .borders(' ')
-            .padding(1, 1)
-            .build();
-        table.set_format(format);
-        table.add_row(row!["Addr", "Bind", "Type", "Symbol", "Section", "Size", "Other"]);
-        for header in self.symtab.iter() {
+        fmt_elf_sym_table(&self.symtab, &self.symstr, &self.section_headers, &self.sh_strtab)?;
 
-            let bind_cell = {
-                let bind_cell = Cell::new(&format!("{:<8}", bind_to_str(header.st_info >> 4)));
-                match header.st_info >> 4 {
-                    STB_LOCAL => bind_cell.style_spec("bBCFD"),
-                    STB_GLOBAL => bind_cell.style_spec("bBRFD"),
-                    STB_WEAK => bind_cell.style_spec("bBMFD"),
-                    _ => bind_cell
-                }
-            };
-            let typ_cell = {
-                let typ_cell = Cell::new(&format!("{:<9}", type_to_str(header.st_info & 0xF)));
-                match header.st_info & 0xF {
-                    STT_OBJECT => typ_cell.style_spec("bFY"),
-                    STT_FUNC => typ_cell.style_spec("bFR"),
-                    STT_GNU_IFUNC => typ_cell.style_spec("bFC"),
-                    STT_FILE => typ_cell.style_spec("bFB"),
-                    STT_SECTION => typ_cell.style_spec("bFW"),
-                    _ => typ_cell
-                }
-            };
-
-            table.add_row(Row::new(vec![
-                Cell::new(&format!("{:#X}", header.st_value)).style_spec("Fr"),
-                bind_cell,
-                typ_cell,
-                Cell::new(self.symstr.pread::<&str>(header.st_name as usize)?).style_spec("Fy"),
-                Cell::new(if (header.st_shndx as usize) < (self.section_headers.len()) {
-                    self.sh_strtab.pread::<&str>(self.section_headers[header.st_shndx as usize].sh_name as usize)?
-                }
-                else {
-                    "ABS"
-                }),
-                Cell::new(&format!("{:#X}", header.st_size)).style_spec("Fg"),
-                Cell::new(&format!("{:#X}", header.st_other)),
-            ]));
-        }
-        table.printstd();
-        println!();
+        //
+        // DynSym table
+        //
+        println!("{}({})",
+                 Color::White.paint("DynSymTable"),
+                 self.dynsym.len());
+        fmt_elf_sym_table(&self.dynsym, &self.dynstr, &self.section_headers, &self.sh_strtab)?;
 
         Ok(())
 
