@@ -9,7 +9,7 @@ use failure::{
     Error,
 };
 
-use crate::format::{fmt_elf, fmt_elf_sym_table,};
+use crate::format::{fmt_elf, fmt_elf_sym_table, fmt_elf_rel_table};
 
 pub const ELF_MAGIC: &'static [u8; ELF_MAGIC_SIZE] = b"\x7FELF";
 pub const ELF_MAGIC_SIZE: usize = 4;
@@ -636,9 +636,9 @@ struct Elf_rel_32 {
 
 #[derive(Debug, Pread)]
 #[repr(C)]
-struct Elf_rel {
-    r_offset: u64,
-    r_info:   u64,
+pub struct Elf_rel {
+    pub r_offset: u64,
+    pub r_info:   u64,
 }
 
 impl From<Elf_rel_32> for Elf_rel {
@@ -664,10 +664,10 @@ struct Elf_rela_32 {
 
 #[derive(Debug, Pread)]
 #[repr(C)]
-struct Elf_rela {
-    r_offset: u64,
-    r_info:   u64,
-    r_addend: i64,
+pub struct Elf_rela {
+    pub r_offset: u64,
+    pub r_info:   u64,
+    pub r_addend: i64,
 }
 
 impl From<Elf_rela_32> for Elf_rela {
@@ -696,7 +696,8 @@ pub struct Elf {
     symstr:          Vec<u8>,
     dynsym:          Vec<Elf_symbol_header>,
     dynstr:          Vec<u8>,
-    reldyn:          Vec<Elf_rel>
+    reldyn:          Vec<Elf_rel>,
+    relplt:          Vec<Elf_rel>,
 }
 
 impl Elf {
@@ -721,6 +722,7 @@ impl Elf {
         let mut dynsym = Vec::new();
         let mut dynstr = Vec::new();
         let mut reldyn = Vec::new();
+        let mut relplt = Vec::new();
 
         match bit_format {
 
@@ -774,6 +776,13 @@ impl Elf {
                             reldyn = Vec::with_capacity(size);
                             for i in 0..size {
                                 reldyn.push(Elf_rel::from(buf.pread_with::<Elf_rel_32>(head.sh_offset as usize + i * head.sh_entsize as usize, endianness)?));
+                            }
+                        }
+                        if sh_strtab.pread::<&str>(head.sh_name as usize)? == ".rel.plt" {
+                            let size = head.sh_size as usize / head.sh_entsize as usize;
+                            relplt = Vec::with_capacity(size);
+                            for i in 0..size {
+                                relplt.push(Elf_rel::from(buf.pread_with::<Elf_rel_32>(head.sh_offset as usize + i * head.sh_entsize as usize, endianness)?));
                             }
                         }
                     }
@@ -830,6 +839,13 @@ impl Elf {
                                 reldyn.push(buf.pread_with::<Elf_rel>(head.sh_offset as usize + i * head.sh_entsize as usize, endianness)?);
                             }
                         }
+                        if sh_strtab.pread::<&str>(head.sh_name as usize)? == ".rel.plt" {
+                            let size = head.sh_size as usize / head.sh_entsize as usize;
+                            relplt = Vec::with_capacity(size);
+                            for i in 0..size {
+                                relplt.push(buf.pread_with::<Elf_rel>(head.sh_offset as usize + i * head.sh_entsize as usize, endianness)?);
+                            }
+                        }
                     }
                 }
 
@@ -850,6 +866,7 @@ impl Elf {
             dynsym,
             dynstr,
             reldyn,
+            relplt,
         })
 
     }
@@ -972,26 +989,15 @@ impl Elf {
         println!("{}({})",
                  Color::White.paint("RelDynTable"),
                  self.reldyn.len());
-        let mut table = Table::new();
-        let format = prettytable::format::FormatBuilder::new()
-            .column_separator(' ')
-            .borders(' ')
-            .padding(1, 1)
-            .build();
-        table.set_format(format);
-        table.add_row(row![r->"Offset", "Type", "Name"]);
-        for header in &self.reldyn {
+        fmt_elf_rel_table(&self.reldyn, &self.dynsym, &self.dynstr, self.header.e_machine)?;
 
-            let info = header.r_info as usize >> 8;
-
-            table.add_row(row![
-                Fr->format!("{:>#16X}", header.r_offset),
-                r_to_str(header.r_info as u32 & 0xFF, self.header.e_machine),
-                Fy->self.dynstr.pread::<&str>(self.dynsym[info].st_name as usize)?,
-            ]);
-        }
-        table.printstd();
-        println!();
+        //
+        // RelPlt table
+        //
+        println!("{}({})",
+                 Color::White.paint("RelPltTable"),
+                 self.relplt.len());
+        fmt_elf_rel_table(&self.relplt, &self.dynsym, &self.dynstr, self.header.e_machine)?;
 
         Ok(())
 

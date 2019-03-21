@@ -1,6 +1,7 @@
 use crate::formats::png::{Prefix, Postfix};
 use failure::Error;
 use scroll::Pread;
+use prettytable::{Cell, Row, Table};
 
 pub fn fmt_indent(fmt: String) {
     print!("{:>2}", "");
@@ -22,12 +23,12 @@ pub fn fmt_png_header(name: &'static str, prefix: &Prefix, postfix: &Postfix) {
 }
 
 use crate::formats::elf::{
-    Elf_header, Elf_symbol_header, Elf_section_header,
+    Elf_header, Elf_symbol_header, Elf_section_header, Elf_rel,
     ET_REL, ET_EXEC, ET_DYN, ET_CORE,
     STB_LOCAL, STB_GLOBAL, STB_WEAK,
     STT_OBJECT, STT_FUNC, STT_SECTION, STT_FILE, STT_GNU_IFUNC,
     ELFDATA2LSB,
-    et_to_str, machine_to_str, type_to_str, bind_to_str,
+    et_to_str, machine_to_str, type_to_str, bind_to_str, r_to_str,
 };
 
 pub fn fmt_elf(header: &Elf_header) {
@@ -85,7 +86,6 @@ pub fn fmt_elf_flags(flags: u32) -> String {
 }
 
 pub fn fmt_elf_sym_table(symtab: &Vec<Elf_symbol_header>, symstr: &Vec<u8>, section_headers: &Vec<Elf_section_header>, sh_strtab: &Vec<u8>) -> Result<(), Error> {
-    use prettytable::{Cell, Row, Table};
 
     let mut table = Table::new();
     let format = prettytable::format::FormatBuilder::new()
@@ -132,6 +132,33 @@ pub fn fmt_elf_sym_table(symtab: &Vec<Elf_symbol_header>, symstr: &Vec<u8>, sect
             Cell::new(&format!("{:#X}", header.st_size)).style_spec("Fg"),
             Cell::new(&format!("{:#X}", header.st_other)),
         ]));
+    }
+    table.printstd();
+    println!();
+
+    Ok(())
+
+}
+
+pub fn fmt_elf_rel_table(rel: &Vec<Elf_rel>, dynsym: &Vec<Elf_symbol_header>, dynstr: &Vec<u8>, machine: u16) -> Result<(), Error>{
+
+    let mut table = Table::new();
+    let format = prettytable::format::FormatBuilder::new()
+        .column_separator(' ')
+        .borders(' ')
+        .padding(1, 1)
+        .build();
+    table.set_format(format);
+    table.add_row(row![r->"Offset", "Type", "Name"]);
+    for header in rel {
+
+        let info = header.r_info as usize >> 8;
+
+        table.add_row(row![
+            Fr->format!("{:>#16X}", header.r_offset),
+            r_to_str(header.r_info as u32 & 0xFF, machine),
+            Fy->dynstr.pread::<&str>(dynsym[info].st_name as usize)?,
+        ]);
     }
     table.printstd();
     println!();
