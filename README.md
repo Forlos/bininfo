@@ -14,14 +14,14 @@ WIP: There is no error handling and no fully supported formats.
 ## Resources
 
 ### Bmp
-https://entropymine.com/jason/bmpsuite/
+- https://entropymine.com/jason/bmpsuite/
 
 ### Elf
-https://github.com/m4b/goblin
+- https://github.com/m4b/goblin
 
 ### Png
-http://www.libpng.org/pub/png/pngsuite.html
-http://www.libpng.org/pub/png/png-sitemap.html#images
+- http://www.libpng.org/pub/png/pngsuite.html
+- http://www.libpng.org/pub/png/png-sitemap.html#images
 
 ### Other
-https://github.com/corkami
+- https://github.com/corkami
