@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 // https://github.com/m4b/goblin
 include!("constants_header.rs");
 
@@ -128,135 +129,137 @@ pub fn pt_to_str(pt: u32) -> &'static str {
     }
 }
 
-/// Undefined section.
+// Undefined section.
 pub const SHN_UNDEF: u32 = 0;
-/// Start of reserved indices.
+// Start of reserved indices.
 pub const SHN_LORESERVE: u32 = 0xff00;
-/// Start of processor-specific.
+// Start of processor-specific.
 pub const SHN_LOPROC: u32 = 0xff00;
-/// Order section before all others (Solaris).
+// Order section before all others (Solaris).
 pub const SHN_BEFORE: u32 = 0xff00;
-/// Order section after all others (Solaris).
+// Order section after all others (Solaris).
 pub const SHN_AFTER: u32 = 0xff01;
-/// End of processor-specific.
+// End of processor-specific.
 pub const SHN_HIPROC: u32 = 0xff1f;
-/// Start of OS-specific.
+// Start of OS-specific.
 pub const SHN_LOOS: u32 = 0xff20;
-/// End of OS-specific.
+// End of OS-specific.
 pub const SHN_HIOS: u32 = 0xff3f;
-/// Associated symbol is absolute.
+// Associated symbol is absolute.
 pub const SHN_ABS: u32 = 0xfff1;
-/// Associated symbol is common.
+// Associated symbol is common.
 pub const SHN_COMMON: u32 = 0xfff2;
-/// Index is in extra table.
+// Index is in extra table.
 pub const SHN_XINDEX: u32 = 0xffff;
-/// End of reserved indices.
+// End of reserved indices.
 pub const SHN_HIRESERVE: u32 = 0xffff;
 
 // === Legal values for sh_type (section type). ===
-/// Section header table entry unused.
+// Section header table entry unused.
 pub const SHT_NULL: u32 = 0;
-/// Program data.
+// Program data.
 pub const SHT_PROGBITS: u32 = 1;
-/// Symbol table.
+// Symbol table.
 pub const SHT_SYMTAB: u32 = 2;
-/// String table.
+// String table.
 pub const SHT_STRTAB: u32 = 3;
-/// Relocation entries with addends.
+// Relocation entries with addends.
 pub const SHT_RELA: u32 = 4;
-/// Symbol hash table.
+// Symbol hash table.
 pub const SHT_HASH: u32 = 5;
-/// Dynamic linking information.
+// Dynamic linking information.
 pub const SHT_DYNAMIC: u32 = 6;
-/// Notes.
+// Notes.
 pub const SHT_NOTE: u32 = 7;
-/// Program space with no data (bss).
+// Program space with no data (bss).
 pub const SHT_NOBITS: u32 = 8;
-/// Relocation entries, no addends.
+// Relocation entries, no addends.
 pub const SHT_REL: u32 = 9;
-/// Reserved.
+// Reserved.
 pub const SHT_SHLIB: u32 = 10;
-/// Dynamic linker symbol table.
+// Dynamic linker symbol table.
 pub const SHT_DYNSYM: u32 = 11;
-/// Array of constructors.
+// Array of constructors.
 pub const SHT_INIT_ARRAY: u32 = 14;
-/// Array of destructors.
+// Array of destructors.
 pub const SHT_FINI_ARRAY: u32 = 15;
-/// Array of pre-constructors.
+// Array of pre-constructors.
 pub const SHT_PREINIT_ARRAY: u32 = 16;
-/// Section group.
+// Section group.
 pub const SHT_GROUP: u32 = 17;
-/// Extended section indeces.
+// Extended section indeces.
 pub const SHT_SYMTAB_SHNDX: u32 = 18;
-/// Number of defined types.
+// Number of defined types.
 pub const SHT_NUM: u32 = 19;
-/// Start OS-specific.
+// Start OS-specific.
 pub const SHT_LOOS: u32 = 0x60000000;
-/// Object attributes.
+// Object attributes.
 pub const SHT_GNU_ATTRIBUTES: u32 = 0x6ffffff5;
-/// GNU-style hash table.
+// GNU-style hash table.
 pub const SHT_GNU_HASH: u32 = 0x6ffffff6;
-/// Prelink library list.
+// Prelink library list.
 pub const SHT_GNU_LIBLIST: u32 = 0x6ffffff7;
-/// Checksum for DSO content.
+// Checksum for DSO content.
 pub const SHT_CHECKSUM: u32 = 0x6ffffff8;
-/// Sun-specific low bound.
+// Sun-specific low bound.
 pub const SHT_LOSUNW: u32 = 0x6ffffffa;
 pub const SHT_SUNW_MOVE: u32 = 0x6ffffffa;
 pub const SHT_SUNW_COMDAT: u32 = 0x6ffffffb;
 pub const SHT_SUNW_SYMINFO: u32 = 0x6ffffffc;
-/// Version definition section.
+// Version definition section.
 pub const SHT_GNU_VERDEF: u32 = 0x6ffffffd;
-/// Version needs section.
+// Version needs section.
 pub const SHT_GNU_VERNEED: u32 = 0x6ffffffe;
-/// Version symbol table.
+// Version symbol table.
 pub const SHT_GNU_VERSYM: u32 = 0x6fffffff;
-/// Sun-specific high bound.
+// Sun-specific high bound.
 pub const SHT_HISUNW: u32 = 0x6fffffff;
-/// End OS-specific type.
+// End OS-specific type.
 pub const SHT_HIOS: u32 = 0x6fffffff;
-/// Start of processor-specific.
+// Start of processor-specific.
 pub const SHT_LOPROC: u32 = 0x70000000;
-/// End of processor-specific.
+// End of processor-specific.
 pub const SHT_HIPROC: u32 = 0x7fffffff;
-/// Start of application-specific.
+// Start of application-specific.
 pub const SHT_LOUSER: u32 = 0x80000000;
-/// End of application-specific.
+// End of application-specific.
 pub const SHT_HIUSER: u32 = 0x8fffffff;
 
 // Legal values for sh_flags (section flags)
-/// Writable.
+// Writable.
 pub const SHF_WRITE: u32 = 0x1;
-/// Occupies memory during execution.
+// Occupies memory during execution.
 pub const SHF_ALLOC: u32 = 0x2;
-/// Executable.
+// Executable.
 pub const SHF_EXECINSTR: u32 = 0x4;
-/// Might be merged.
+// Might be merged.
 pub const SHF_MERGE: u32 = 0x10;
-/// Contains nul-terminated strings.
+// Contains nul-terminated strings.
 pub const SHF_STRINGS: u32 = 0x20;
-/// `sh_info' contains SHT index.
+// `sh_info' contains SHT index.
 pub const SHF_INFO_LINK: u32 = 0x40;
-/// Preserve order after combining.
+// Preserve order after combining.
 pub const SHF_LINK_ORDER: u32 = 0x80;
-/// Non-standard OS specific handling required.
+// Non-standard OS specific handling required.
 pub const SHF_OS_NONCONFORMING: u32 = 0x100;
-/// Section is member of a group.
+// Section is member of a group.
 pub const SHF_GROUP: u32 = 0x200;
-/// Section hold thread-local data.
+// Section hold thread-local data.
 pub const SHF_TLS: u32 = 0x400;
-/// Section with compressed data.
+// Section with compressed data.
 pub const SHF_COMPRESSED: u32 = 0x800;
-/// OS-specific..
+// OS-specific..
 pub const SHF_MASKOS: u32 = 0x0ff00000;
-/// Processor-specific.
+// Processor-specific.
 pub const SHF_MASKPROC: u32 = 0xf0000000;
-/// Special ordering requirement (Solaris).
+// Special ordering requirement (Solaris).
 pub const SHF_ORDERED: u32 = 1 << 30;
-/// Number of "regular" section header flags
+// Number of "regular" section header flags
 pub const SHF_NUM_REGULAR_FLAGS: usize = 12;
-// /// Section is excluded unless referenced or allocated (Solaris).
+// // Section is excluded unless referenced or allocated (Solaris).
 // pub const SHF_EXCLUDE: u32 = 1U << 31;
+
+
 
 pub const SHF_FLAGS: [u32; SHF_NUM_REGULAR_FLAGS] = [
     SHF_WRITE,
@@ -328,6 +331,82 @@ pub fn shf_to_str(shf: u32) -> &'static str {
         //SHF_MASKOS..SHF_MASKPROC => "SHF_OSFLAG",
         SHF_ORDERED => "SHF_ORDERED",
         _ => "SHF_UNKNOWN"
+    }
+}
+
+// === Sym bindings ===
+// Local symbol.
+const STB_LOCAL: u8 = 0;
+// Global symbol.
+const STB_GLOBAL: u8 = 1;
+// Weak symbol.
+const STB_WEAK: u8 = 2;
+// Number of defined types..
+const STB_NUM: u8 = 3;
+// Start of OS-specific.
+const STB_LOOS: u8 = 10;
+// Unique symbol..
+const STB_GNU_UNIQUE: u8 = 10;
+// End of OS-specific.
+const STB_HIOS: u8 = 12;
+// Start of processor-specific.
+const STB_LOPROC: u8 = 13;
+// End of processor-specific.
+const STB_HIPROC: u8 = 15;
+
+// === Sym types ===
+// Symbol type is unspecified.
+const STT_NOTYPE: u8 = 0;
+// Symbol is a data object.
+const STT_OBJECT: u8 = 1;
+// Symbol is a code object.
+const STT_FUNC: u8 = 2;
+// Symbol associated with a section.
+const STT_SECTION: u8 = 3;
+// Symbol's name is file name.
+const STT_FILE: u8 = 4;
+// Symbol is a common data object.
+const STT_COMMON: u8 = 5;
+// Symbol is thread-local data object.
+const STT_TLS: u8 = 6;
+// Number of defined types.
+const STT_NUM: u8 = 7;
+// Start of OS-specific.
+const STT_LOOS: u8 = 10;
+// Symbol is indirect code object.
+const STT_GNU_IFUNC: u8 = 10;
+// End of OS-specific.
+const STT_HIOS: u8 = 12;
+// Start of processor-specific.
+const STT_LOPROC: u8 = 13;
+// End of processor-specific.
+const STT_HIPROC: u8 = 15;
+
+#[inline]
+pub fn bind_to_str(typ: u8) -> &'static str {
+    match typ {
+        STB_LOCAL => "LOCAL",
+        STB_GLOBAL => "GLOBAL",
+        STB_WEAK => "WEAK",
+        STB_NUM => "NUM",
+        STB_GNU_UNIQUE => "GNU_UNIQUE",
+        _ => "UNKNOWN_STB",
+    }
+}
+
+#[inline]
+pub fn type_to_str(typ: u8) -> &'static str {
+    match typ {
+        STT_NOTYPE => "NOTYPE",
+        STT_OBJECT => "OBJECT",
+        STT_FUNC => "FUNC",
+        STT_SECTION => "SECTION",
+        STT_FILE => "FILE",
+        STT_COMMON => "COMMON",
+        STT_TLS => "TLS",
+        STT_NUM => "NUM",
+        STT_GNU_IFUNC => "GNU_IFUNC",
+        _ => "UNKNOWN_STT",
     }
 }
 
@@ -508,18 +587,59 @@ impl From<Elf_section_header_32> for Elf_section_header {
 
 }
 
+#[derive(Debug, Pread)]
+#[repr(C)]
+struct Elf_symbol_header_32 {
+    st_name: u32,
+    st_value: u32,
+    st_size: u32,
+    st_info: u8,
+    st_other: u8,
+    st_shndx: u16,
+}
+
+#[derive(Debug, Pread)]
+#[repr(C)]
+struct Elf_symbol_header {
+    st_name: u32,
+    st_info: u8,
+    st_other: u8,
+    st_shndx: u16,
+    st_value: u64,
+    st_size: u64,
+}
+
+impl From<Elf_symbol_header_32> for Elf_symbol_header {
+
+    fn from(header: Elf_symbol_header_32) -> Self {
+
+        Elf_symbol_header {
+            st_name:  header.st_name,
+            st_info:  header.st_info,
+            st_other: header.st_other,
+            st_shndx: header.st_shndx,
+            st_value: header.st_value as u64,
+            st_size:  header.st_size as u64,
+        }
+
+    }
+
+}
+
 // const SIZE_OF_SECTION_HEADER_32: usize = 10 * 4;
 // const SIZE_OF_SECTION_HEADER_64: usize = 6 * 8 + 4 * 4;
 
 pub struct Elf {
-    header: Elf_header,
+    header:          Elf_header,
     program_headers: Vec<Elf_program_header>,
     section_headers: Vec<Elf_section_header>,
-    sh_strtab: Vec<u8>,
+    sh_strtab:       Vec<u8>,
+    symtab:          Vec<Elf_symbol_header>,
+    symstr:          Vec<u8>,
+    // dynsym:          Vec<Elf_symbol_header>,
 }
 
 impl Elf {
-
 
     pub fn parse(buf: &[u8]) -> Result<Self, Error> {
 
@@ -536,6 +656,8 @@ impl Elf {
         let mut program_headers;
         let mut section_headers;
         let mut sh_strtab;
+        let mut symtab = Vec::new();
+        let mut symstr = Vec::new();
 
         match bit_format {
 
@@ -564,6 +686,18 @@ impl Elf {
                 let shstr_size = section_headers[header.e_shstrndx as usize].sh_size as usize;
                 sh_strtab = buf[shstr_idx..shstr_idx + shstr_size].to_vec();
 
+                for head in &section_headers {
+                    if head.sh_type == SHT_SYMTAB {
+                        let size = head.sh_size as usize / head.sh_entsize as usize;
+                        symtab = Vec::with_capacity(size);
+                        for i in 0..size {
+                            symtab.push(Elf_symbol_header::from(buf.pread_with::<Elf_symbol_header_32>(head.sh_offset as usize + i * head.sh_entsize as usize, endianness)?));
+                        }
+                        let _symstr = &section_headers[head.sh_link as usize];
+                        symstr = buf[_symstr.sh_offset as usize.._symstr.sh_offset as usize + _symstr.sh_size as usize].to_vec();
+                    }
+                }
+
             },
             ELFCLASS64 => {
                 header = buf.pread_with::<Elf_header>(0, endianness)?;
@@ -588,6 +722,18 @@ impl Elf {
                 let shstr_size = section_headers[header.e_shstrndx as usize].sh_size as usize;
                 sh_strtab = buf[shstr_idx..shstr_idx + shstr_size].to_vec();
 
+                for head in &section_headers {
+                    if head.sh_type == SHT_SYMTAB {
+                        let size = head.sh_size as usize / head.sh_entsize as usize;
+                        symtab = Vec::with_capacity(size);
+                        for i in 0..size {
+                            symtab.push(buf.pread_with::<Elf_symbol_header>(head.sh_offset as usize + i * head.sh_entsize as usize, endianness)?);
+                        }
+                        let _symstr = &section_headers[head.sh_link as usize];
+                        symstr = buf[_symstr.sh_offset as usize.._symstr.sh_offset as usize + _symstr.sh_size as usize].to_vec();
+                    }
+                }
+
             },
             _ => {
                 panic!("Invalid EI_CLASS");
@@ -600,13 +746,15 @@ impl Elf {
             program_headers,
             section_headers,
             sh_strtab,
+            symtab,
+            symstr,
         })
 
     }
 
     pub fn print(&self) -> Result<(), Error> {
         use ansi_term::Color;
-        use prettytable::Table;
+        use prettytable::{Table, Cell, Row};
 
         //
         // ELF file
@@ -696,6 +844,61 @@ impl Elf {
                 format!("{:#X}", header.sh_entsize),
                 format!("{:#X}", header.sh_addralign),
             ]);
+        }
+        table.printstd();
+        println!();
+
+        //
+        // Symbol table
+        //
+        println!("{}({})",
+                 Color::White.paint("SymbolTable"),
+                 self.symtab.len());
+        let mut table = Table::new();
+        let format = prettytable::format::FormatBuilder::new()
+            .column_separator(' ')
+            .borders(' ')
+            .padding(1, 1)
+            .build();
+        table.set_format(format);
+        table.add_row(row!["Addr", "Bind", "Type", "Symbol", "Section", "Size", "Other"]);
+        for header in self.symtab.iter() {
+
+            let bind_cell = {
+                let bind_cell = Cell::new(&format!("{:<8}", bind_to_str(header.st_info >> 4)));
+                match header.st_info >> 4 {
+                    STB_LOCAL => bind_cell.style_spec("bBCFD"),
+                    STB_GLOBAL => bind_cell.style_spec("bBRFD"),
+                    STB_WEAK => bind_cell.style_spec("bBMFD"),
+                    _ => bind_cell
+                }
+            };
+            let typ_cell = {
+                let typ_cell = Cell::new(&format!("{:<9}", type_to_str(header.st_info & 0xF)));
+                match header.st_info & 0xF {
+                    STT_OBJECT => typ_cell.style_spec("bFY"),
+                    STT_FUNC => typ_cell.style_spec("bFR"),
+                    STT_GNU_IFUNC => typ_cell.style_spec("bFC"),
+                    STT_FILE => typ_cell.style_spec("bFB"),
+                    STT_SECTION => typ_cell.style_spec("bFW"),
+                    _ => typ_cell
+                }
+            };
+
+            table.add_row(Row::new(vec![
+                Cell::new(&format!("{:#X}", header.st_value)).style_spec("Fr"),
+                bind_cell,
+                typ_cell,
+                Cell::new(self.symstr.pread::<&str>(header.st_name as usize)?).style_spec("Fy"),
+                Cell::new(if (header.st_shndx as usize) < (self.section_headers.len()) {
+                    self.sh_strtab.pread::<&str>(self.section_headers[header.st_shndx as usize].sh_name as usize)?
+                }
+                else {
+                    "ABS"
+                }),
+                Cell::new(&format!("{:#X}", header.st_size)).style_spec("Fg"),
+                Cell::new(&format!("{:#X}", header.st_other)),
+            ]));
         }
         table.printstd();
         println!();
