@@ -94,7 +94,7 @@ pub fn fmt_elf_sym_table(symtab: &Vec<Elf_symbol_header>, symstr: &Vec<u8>, sect
         .padding(1, 1)
         .build();
     table.set_format(format);
-    table.add_row(row!["Addr", "Bind", "Type", "Symbol", "Section", "Size", "Other"]);
+    table.add_row(row![r->"Addr", "Bind", "Type", "Symbol", "Section", "Size", "Other"]);
     for header in symtab.iter() {
 
         let bind_cell = {

@@ -1,6 +1,7 @@
 #![allow(dead_code)]
 // https://github.com/m4b/goblin
 include!("constants_header.rs");
+include!("constants_relocation.rs");
 
 use scroll::{self, Pread};
 
@@ -626,6 +627,63 @@ impl From<Elf_symbol_header_32> for Elf_symbol_header {
 
 }
 
+#[derive(Debug, Pread)]
+#[repr(C)]
+struct Elf_rel_32 {
+    r_offset: u32,
+    r_info:   u32,
+}
+
+#[derive(Debug, Pread)]
+#[repr(C)]
+struct Elf_rel {
+    r_offset: u64,
+    r_info:   u64,
+}
+
+impl From<Elf_rel_32> for Elf_rel {
+
+    fn from(header: Elf_rel_32) -> Self {
+
+        Elf_rel {
+            r_offset: header.r_offset as u64,
+            r_info:   header.r_info   as u64,
+        }
+
+    }
+
+}
+
+#[derive(Debug, Pread)]
+#[repr(C)]
+struct Elf_rela_32 {
+    r_offset: u32,
+    r_info:   u32,
+    r_addend: i32,
+}
+
+#[derive(Debug, Pread)]
+#[repr(C)]
+struct Elf_rela {
+    r_offset: u64,
+    r_info:   u64,
+    r_addend: i64,
+}
+
+impl From<Elf_rela_32> for Elf_rela {
+
+    fn from(header: Elf_rela_32) -> Self {
+
+        Elf_rela {
+            r_offset: header.r_offset as u64,
+            r_info:   header.r_info   as u64,
+            r_addend: header.r_addend as i64,
+        }
+
+    }
+
+}
+
 // const SIZE_OF_SECTION_HEADER_32: usize = 10 * 4;
 // const SIZE_OF_SECTION_HEADER_64: usize = 6 * 8 + 4 * 4;
 
@@ -638,6 +696,7 @@ pub struct Elf {
     symstr:          Vec<u8>,
     dynsym:          Vec<Elf_symbol_header>,
     dynstr:          Vec<u8>,
+    reldyn:          Vec<Elf_rel>
 }
 
 impl Elf {
@@ -661,6 +720,7 @@ impl Elf {
         let mut symstr = Vec::new();
         let mut dynsym = Vec::new();
         let mut dynstr = Vec::new();
+        let mut reldyn = Vec::new();
 
         match bit_format {
 
@@ -708,6 +768,15 @@ impl Elf {
                         let _dynstr = &section_headers[head.sh_link as usize];
                         dynstr = buf[_dynstr.sh_offset as usize.._dynstr.sh_offset as usize + _dynstr.sh_size as usize].to_vec();
                     }
+                    if head.sh_type == SHT_REL {
+                        if sh_strtab.pread::<&str>(head.sh_name as usize)? == ".rel.dyn" {
+                            let size = head.sh_size as usize / head.sh_entsize as usize;
+                            reldyn = Vec::with_capacity(size);
+                            for i in 0..size {
+                                reldyn.push(Elf_rel::from(buf.pread_with::<Elf_rel_32>(head.sh_offset as usize + i * head.sh_entsize as usize, endianness)?));
+                            }
+                        }
+                    }
                 }
 
             },
@@ -753,6 +822,15 @@ impl Elf {
                         let _dynstr = &section_headers[head.sh_link as usize];
                         dynstr = buf[_dynstr.sh_offset as usize.._dynstr.sh_offset as usize + _dynstr.sh_size as usize].to_vec();
                     }
+                    if head.sh_type == SHT_REL {
+                        if sh_strtab.pread::<&str>(head.sh_name as usize)? == ".rel.dyn" {
+                            let size = head.sh_size as usize / head.sh_entsize as usize;
+                            reldyn = Vec::with_capacity(size);
+                            for i in 0..size {
+                                reldyn.push(buf.pread_with::<Elf_rel>(head.sh_offset as usize + i * head.sh_entsize as usize, endianness)?);
+                            }
+                        }
+                    }
                 }
 
             },
@@ -771,13 +849,14 @@ impl Elf {
             symstr,
             dynsym,
             dynstr,
+            reldyn,
         })
 
     }
 
     pub fn print(&self) -> Result<(), Error> {
         use ansi_term::Color;
-        use prettytable::{Table, Cell, Row};
+        use prettytable::{Table};
 
         //
         // ELF file
@@ -886,6 +965,33 @@ impl Elf {
                  Color::White.paint("DynSymTable"),
                  self.dynsym.len());
         fmt_elf_sym_table(&self.dynsym, &self.dynstr, &self.section_headers, &self.sh_strtab)?;
+
+        //
+        // RelDyn table
+        //
+        println!("{}({})",
+                 Color::White.paint("RelDynTable"),
+                 self.reldyn.len());
+        let mut table = Table::new();
+        let format = prettytable::format::FormatBuilder::new()
+            .column_separator(' ')
+            .borders(' ')
+            .padding(1, 1)
+            .build();
+        table.set_format(format);
+        table.add_row(row![r->"Offset", "Type", "Name"]);
+        for header in &self.reldyn {
+
+            let info = header.r_info as usize >> 8;
+
+            table.add_row(row![
+                Fr->format!("{:>#16X}", header.r_offset),
+                r_to_str(header.r_info as u32 & 0xFF, self.header.e_machine),
+                Fy->self.dynstr.pread::<&str>(self.dynsym[info].st_name as usize)?,
+            ]);
+        }
+        table.printstd();
+        println!();
 
         Ok(())
 
