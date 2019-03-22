@@ -76,7 +76,12 @@ fn run(file_path: &str) -> Result<(), Error> {
         Binary::Elf(elf) => {
             elf.print()?;
         }
-        Binary::Unknown  => (),
+        Binary::Unknown  => {
+            use ansi_term::Color;
+
+            println!("{}", Color::Black.on(Color::Red).paint("Unknown/unsupported file format"));
+            println!("Check for newest version: {}", "https://github.com/Forlos/bininfo");
+        },
     }
 
     Ok(())
