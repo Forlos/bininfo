@@ -9,6 +9,7 @@ use failure::{
 pub enum Binary {
     Png(png::Png),
     Bmp(bmp::Bmp),
+    Elf(elf::Elf),
     Unknown,
 }
 
@@ -21,6 +22,7 @@ impl Binary {
         match magic::parse(&mut Cursor::new(&buf))? {
             Format::Png => Ok(Binary::Png(png::Png::parse(buf)?)),
             Format::Bmp => Ok(Binary::Bmp(bmp::Bmp::parse(buf)?)),
+            Format::Elf => Ok(Binary::Elf(elf::Elf::parse(buf)?)),
             Format::Unknown => Ok(Binary::Unknown),
         }
 

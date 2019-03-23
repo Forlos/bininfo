@@ -1,9 +1,7 @@
 #![allow(non_camel_case_types, dead_code)]
+use crate::Problem;
 
-use failure::{
-    Error,
-};
-
+use failure::{Error};
 use scroll::{self, Pread};
 
 use crate::format::{
@@ -121,9 +119,12 @@ impl Bmp {
 
     pub fn parse(buf: &[u8]) -> Result<Self, Error> {
 
-        let bmp_header = buf.pread_with(0, scroll::LE)?;
-        let size       = buf.pread_with::<u32>(BMP_HEADER_SIZE, scroll::LE)? as usize;
-        let dib_header = buf.pread_with(BMP_HEADER_SIZE, scroll::LE)?;
+        let bmp_header = buf.pread_with(0, scroll::LE)
+            .map_err(|e| Problem::Msg(format!("Could not read bmp header: {}", e)))?;
+        let size       = buf.pread_with::<u32>(BMP_HEADER_SIZE, scroll::LE)
+            .map_err(|e| Problem::Msg(format!("Could not read bmp info header size: {}", e)))? as usize;
+        let dib_header = buf.pread_with(BMP_HEADER_SIZE, scroll::LE)
+            .map_err(|e| Problem::Msg(format!("Could not read BMPINFOHEADER: {}", e)))?;
 
         let mut rgb_bitmask       = None;
         let mut alpha_bitmask     = None;
@@ -132,19 +133,23 @@ impl Bmp {
 
         if size >= INFO_V2 {
             rgb_bitmask = Some(buf
-                .pread_with::<RGB_bitmask>(BMP_HEADER_SIZE + INFO_V1, scroll::BE)?);
+                .pread_with::<RGB_bitmask>(BMP_HEADER_SIZE + INFO_V1, scroll::BE)
+                    .map_err(|e| Problem::Msg(format!("Could not read BITMAPV2INFOHEADER: {}", e)))?);
         }
         if size >= INFO_V3 {
             alpha_bitmask = Some(buf
-                .pread_with::<Alpha_bitmask>(BMP_HEADER_SIZE + INFO_V2, scroll::BE)?);
+                .pread_with::<Alpha_bitmask>(BMP_HEADER_SIZE + INFO_V2, scroll::BE)
+                    .map_err(|e| Problem::Msg(format!("Could not read BITMAPV3INFOHEADER: {}", e)))?);
         }
         if size >= INFO_V4 {
             color_space_gamma = Some(buf
-                .pread_with::<Color_space_gamma>(BMP_HEADER_SIZE + INFO_V3, scroll::LE)?);
+                .pread_with::<Color_space_gamma>(BMP_HEADER_SIZE + INFO_V3, scroll::LE)
+                    .map_err(|e| Problem::Msg(format!("Could not read BITMAPV4INFOHEADER: {}", e)))?);
         }
         if size == INFO_V5 {
             icc_color = Some(buf
-                .pread_with::<ICC_color_prof>(BMP_HEADER_SIZE + INFO_V4, scroll::LE)?);
+                .pread_with::<ICC_color_prof>(BMP_HEADER_SIZE + INFO_V4, scroll::LE)
+                    .map_err(|e| Problem::Msg(format!("Could not read BITMAPV5INFOHEADER: {}", e)))?);
         }
 
         Ok(Bmp {
@@ -257,7 +262,6 @@ impl Bmp {
                 if i % 16 == 0 {
                     println!("");
                     fmt_indent(format!("{:02X} ", b));
-                    // print!("\n{:#04X} ", b);
                 }
                 else {
                     print!("{:02X} ", b);
