@@ -973,7 +973,10 @@ impl Elf {
         println!("{}({})",
                  Color::White.paint("SymbolTable"),
                  self.symtab.len());
-        fmt_elf_sym_table(&self.symtab, &self.symstr, &self.section_headers, &self.sh_strtab)?;
+        if self.symtab.len() > 0 {
+            fmt_elf_sym_table(&self.symtab, &self.symstr, &self.section_headers, &self.sh_strtab)?;
+        }
+        println!();
 
         //
         // DynSym table
@@ -981,7 +984,10 @@ impl Elf {
         println!("{}({})",
                  Color::White.paint("DynSymTable"),
                  self.dynsym.len());
-        fmt_elf_sym_table(&self.dynsym, &self.dynstr, &self.section_headers, &self.sh_strtab)?;
+        if self.dynsym.len() > 0 {
+            fmt_elf_sym_table(&self.dynsym, &self.dynstr, &self.section_headers, &self.sh_strtab)?;
+        }
+        println!();
 
         //
         // RelDyn table
@@ -989,7 +995,10 @@ impl Elf {
         println!("{}({})",
                  Color::White.paint("RelDynTable"),
                  self.reldyn.len());
-        fmt_elf_rel_table(&self.reldyn, &self.dynsym, &self.dynstr, self.header.e_machine)?;
+        if self.reldyn.len() > 0 {
+            fmt_elf_rel_table(&self.reldyn, &self.dynsym, &self.dynstr, self.header.e_machine)?;
+        }
+        println!();
 
         //
         // RelPlt table
@@ -997,7 +1006,10 @@ impl Elf {
         println!("{}({})",
                  Color::White.paint("RelPltTable"),
                  self.relplt.len());
-        fmt_elf_rel_table(&self.relplt, &self.dynsym, &self.dynstr, self.header.e_machine)?;
+        if self.relplt.len() > 0 {
+            fmt_elf_rel_table(&self.relplt, &self.dynsym, &self.dynstr, self.header.e_machine)?;
+        }
+        println!();
 
         Ok(())
 

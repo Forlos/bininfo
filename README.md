@@ -1,6 +1,6 @@
 <a href="http://spacemacs.org"><img src="https://cdn.rawgit.com/syl20bnr/spacemacs/442d025779da2f62fc86c2082703697714db6514/assets/spacemacs-badge.svg" alt="Made with Spacemacs"></a><br>
 # Bininfo 
-WIP: There is no error handling and no fully supported formats.
+Warning: Error handling is very basic and hasn't been tested.
 
 ## Supported formats
 - [x] BMP

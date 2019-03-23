@@ -134,7 +134,6 @@ pub fn fmt_elf_sym_table(symtab: &Vec<Elf_symbol_header>, symstr: &Vec<u8>, sect
         ]));
     }
     table.printstd();
-    println!();
 
     Ok(())
 
@@ -161,7 +160,6 @@ pub fn fmt_elf_rel_table(rel: &Vec<Elf_rel>, dynsym: &Vec<Elf_symbol_header>, dy
         ]);
     }
     table.printstd();
-    println!();
 
     Ok(())
 

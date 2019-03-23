@@ -1,9 +1,8 @@
 use scroll::{self, Pread};
+use ansi_term::Color;
+use failure::Error;
 
-use failure::{
-    Error,
-};
-
+use crate::Problem;
 use crate::format::{fmt_indent, fmt_indentln, fmt_png_header};
 
 pub const PNG_HEADER: &'static [u8; PNG_HEADER_SIZE] = b"\x89PNG\x0D\x0A\x1A\x0A";
@@ -20,10 +19,34 @@ pub struct Prefix {
     id:       u32,
 }
 
+impl Prefix {
+
+    #[inline]
+    pub fn new(buf: &[u8], index: usize) -> Result<Self, Error> {
+        let prefix = buf.pread_with(index, scroll::BE)
+            .map_err(|e| Problem::Msg(format!("Could not read chunk checksum: {}", e)))?;
+
+        Ok(prefix)
+    }
+
+}
+
 #[derive(Debug, Pread)]
 #[repr(C)]
 pub struct Postfix {
     pub checksum: u32,
+}
+
+impl Postfix {
+
+    #[inline]
+    pub fn new(buf: &[u8], index: usize) -> Result<Self, Error> {
+        let postfix = buf.pread_with(index, scroll::BE)
+            .map_err(|e| Problem::Msg(format!("Could not read chunk checksum: {}", e)))?;
+
+        Ok(postfix)
+    }
+
 }
 
 #[derive(Debug, Pread)]
@@ -536,35 +559,39 @@ impl Png {
         //
         let mut ster = None;
 
-        let ihdr: Ihdr = buf.pread_with(PNG_HEADER_SIZE, scroll::BE)?;
+        let ihdr: Ihdr = buf.pread_with(PNG_HEADER_SIZE, scroll::BE)
+            .map_err(|e| Problem::Msg(format!("Could not read IHDR: {}", e)))?;
 
         let mut index = PNG_HEADER_SIZE;
 
         while index < buf.len() {
 
-            let size = buf.pread_with::<u32>(index, scroll::BE)? as usize;
+            let size = buf.pread_with::<u32>(index, scroll::BE)
+                .map_err(|e| Problem::Msg(format!("Could not read chunk size: {}", e)))? as usize;
             let id   = &buf[index + 4..index + 8];
-            let s    = std::str::from_utf8(id)?;
+            let s    = std::str::from_utf8(id).
+                map_err(|e| Problem::Msg(format!("Chunk name should be ASCII letters: {}", e)))?;
 
             match s {
                 "IHDR" => {
                     ()
                 },
                 "PLTE" => {
-                    let prefix = buf.pread_with::<Prefix>(index, scroll::BE)?;
+                    // This should never return error as the size and id has been already read leave it to panic!
+                    let prefix = Prefix::new(buf, index)?;
                     let size = prefix.size as usize;
                     if size % 3 != 0 {
-                        panic!("PLTE Length must be divisible by 3");
+                        return Err(Error::from(Problem::Msg(format!("PLTE size must be divisible by 3"))));
                     }
                     let mut rgb = Vec::new();
                     for i in 0..size / 3 {
-                        rgb.push(buf.pread_with::<RGB>(index + 8 + i * 3,
-                                                       scroll::BE)?)
+                        rgb.push(buf.pread_with::<RGB>(index + 8 + i * 3, scroll::BE)
+                                 .map_err(|e| Problem::Msg(format!("Could not read PLTE pallete: {}" ,e)))?)
                     }
                     plte = Some(Plte {
                         prefix,
                         rgb,
-                        postfix: buf.pread_with(index + size + 8, scroll::BE)?,
+                        postfix: Postfix::new(buf, index + size + 8)?,
                     });
                 },
                 "IDAT" => {
@@ -572,8 +599,8 @@ impl Png {
                     data.append(&mut inner_data);
 
                     let dat = Idat {
-                        prefix: buf.pread_with(index, scroll::BE)?,
-                        postfix: buf.pread_with(index + size + 8, scroll::BE)?,
+                        prefix: Prefix::new(buf, index)?,
+                        postfix: Postfix::new(buf, index + size + 8)?,
 
                     };
 
@@ -581,34 +608,40 @@ impl Png {
 
                 },
                 "IEND" => {
-                    iend = Some(buf.pread_with(index, scroll::BE)?);
+                    iend = Some(buf.pread_with(index, scroll::BE)
+                                .map_err(|e| Problem::Msg(format!("Could not read IEND chunk: {}", e)))?);
                 },
                 "bKGD" => {
                     let color_type = ihdr.color;
                     let color;
                     if color_type == 3 {
-                        color = bKGD::bKGD3(buf.pread_with(index + 8, scroll::BE)?);
+                        color = bKGD::bKGD3(buf.pread_with(index + 8, scroll::BE)
+                                            .map_err(|e| Problem::Msg(format!("Could not read bKGD chunk: {}", e)))?);
                     }
                     else if color_type == 0 || color_type == 4 {
-                        color = bKGD::bKGD04(buf.pread_with(index + 8, scroll::BE)?);
+                        color = bKGD::bKGD04(buf.pread_with(index + 8, scroll::BE)
+                                             .map_err(|e| Problem::Msg(format!("Could not read bKGD chunk: {}", e)))?);
                     }
                     else if color_type == 2 || color_type == 6 {
-                        color = bKGD::bKGD26(buf.pread_with(index + 8, scroll::BE)?);
+                        color = bKGD::bKGD26(buf.pread_with(index + 8, scroll::BE)
+                                             .map_err(|e| Problem::Msg(format!("Could not read bKGD chunk: {}", e)))?);
                     }
                     else {
-                        panic!("Invalid color type for bKGD");
+                        return Err(Error::from(Problem::Msg(format!("Invalid color type: {} for bKGD", color_type))));
                     }
                     bkgd = Some(Bkgd {
-                        prefix: buf.pread_with(index, scroll::BE)?,
+                        prefix: Prefix::new(buf, index)?,
                         color,
-                        postfix: buf.pread_with(index + size + 8, scroll::BE)?,
+                        postfix: Postfix::new(buf, index + size + 8)?,
                     });
                 },
                 "cHRM" => {
-                    chrm = Some(buf.pread_with(index, scroll::BE)?);
+                    chrm = Some(buf.pread_with(index, scroll::BE)
+                                .map_err(|e| Problem::Msg(format!("Could not read cHRM chunk: {}", e)))?);
                 },
                 "gAMA" => {
-                    gama = Some(buf.pread_with(index, scroll::BE)?);
+                    gama = Some(buf.pread_with(index, scroll::BE)
+                                .map_err(|e| Problem::Msg(format!("Could not read gAMA chunk: {}", e)))?);
                 },
                 "hIST" => {
                     if let Some(plte) = &plte {
@@ -616,80 +649,92 @@ impl Png {
                         let mut entries = Vec::with_capacity(hist_size);
                         let mut sum = 0;
                         for i in 0..hist_size {
-                            entries.push(buf.pread_with(index + 8 + i * 2, scroll::BE)?);
+                            entries.push(buf.pread_with(index + 8 + i * 2, scroll::BE)
+                                         .map_err(|e| Problem::Msg(format!("Could not read hIST entry: {}", e)))?);
                             sum += entries[i] as u64;
                         }
                         hist = Some(Hist {
-                            prefix: buf.pread_with(index, scroll::BE)?,
+                            prefix: Prefix::new(buf, index)?,
                             entries,
                             sum,
-                            postfix: buf.pread_with(index + size + 8, scroll::BE)?,
+                            postfix: Postfix::new(buf, index + size + 8)?,
                         });
                     }
                     else {
-                        panic!("Need PLTE chunk");
+                        return Err(Error::from(Problem::Msg(format!("hIST chunk needs PLTE chunk present to be valid"))));
                     }
                 },
                 "pHYs" => {
-                    phys = Some(buf.pread_with(index, scroll::BE)?);
+                    phys = Some(buf.pread_with(index, scroll::BE)
+                                .map_err(|e| Problem::Msg(format!("Could not read pHYs chunk: {}", e)))?);
                 },
                 "sBIT" => {
                     let color_type = ihdr.color;
                     let inner_sbit;
                     match color_type {
                         0 => {
-                            inner_sbit = sBIT::sBIT0(buf.pread_with(index + 8, scroll::BE)?);
+                            inner_sbit = sBIT::sBIT0(buf.pread_with(index + 8, scroll::BE)
+                                                     .map_err(|e| Problem::Msg(format!("Could not read sBIT chunk: {}", e)))?);
                         },
                         2 => {
-                            inner_sbit = sBIT::sBIT2(buf.pread_with(index + 8, scroll::BE)?);
+                            inner_sbit = sBIT::sBIT2(buf.pread_with(index + 8, scroll::BE)
+                                                     .map_err(|e| Problem::Msg(format!("Could not read sBIT chunk: {}", e)))?);
                         },
                         3 => {
-                            inner_sbit = sBIT::sBIT3(buf.pread_with(index + 8, scroll::BE)?);
+                            inner_sbit = sBIT::sBIT3(buf.pread_with(index + 8, scroll::BE)
+                                                     .map_err(|e| Problem::Msg(format!("Could not read sBIT chunk: {}", e)))?);
                         },
                         4 => {
-                            inner_sbit = sBIT::sBIT4(buf.pread_with(index + 8, scroll::BE)?);
+                            inner_sbit = sBIT::sBIT4(buf.pread_with(index + 8, scroll::BE)
+                                                     .map_err(|e| Problem::Msg(format!("Could not read sBIT chunk: {}", e)))?);
                         },
                         6 => {
-                            inner_sbit = sBIT::sBIT6(buf.pread_with(index + 8, scroll::BE)?);
+                            inner_sbit = sBIT::sBIT6(buf.pread_with(index + 8, scroll::BE)
+                                                     .map_err(|e| Problem::Msg(format!("Could not read sBIT chunk: {}", e)))?);
                         },
                         _ => {
-                            panic!("Invalid color type for sBIT");
+                            return Err(Error::from(Problem::Msg(format!("Invalid color type: {} for sBIT chunk", color_type))));
                         }
                     }
                     sbit = Some(Sbit {
-                        prefix: buf.pread_with(index, scroll::BE)?,
+                        prefix: Prefix::new(buf, index)?,
                         sbit: inner_sbit,
-                        postfix: buf.pread_with(index + size + 8, scroll::BE)?,
+                        postfix: Postfix::new(buf, index + size + 8)?,
                     });
                 },
                 "tEXt" => {
-                    let keyword = buf.pread::<&str>(index + 8)?.to_string();
+                    let keyword = buf.pread::<&str>(index + 8)
+                        .map_err(|e| Problem::Msg(format!("Could not read keyword field of tEXt chunk: {}", e)))?.to_string();
                     let inner_text = std::str::from_utf8(
-                        &buf[index + 9 + keyword.len()..index + size + 8])?.to_string();
+                        &buf[index + 9 + keyword.len()..index + size + 8])
+                        .map_err(|e| Problem::Msg(format!("Text field of tEXt chunk must be valid Latin-1: {}", e)))?.to_string();
 
                     let text_chunk = Text {
-                        prefix: buf.pread_with(index, scroll::BE)?,
+                        prefix: Prefix::new(buf, index)?,
                         keyword,
                         text: inner_text,
-                        postfix: buf.pread_with(index + size + 8, scroll::BE)?,
+                        postfix: Postfix::new(buf, index + size + 8)?,
                     };
 
                     text.push(text_chunk);
 
                 },
                 "tIME" => {
-                    time = Some(buf.pread_with(index, scroll::BE)?);
+                    time = Some(buf.pread_with(index, scroll::BE)
+                                .map_err(|e| Problem::Msg(format!("Could not read tIME chunk: {}", e)))?);
                 },
                 "tRNS" => {
-                    let prefix = buf.pread_with::<Prefix>(index, scroll::BE)?;
+                    let prefix = Prefix::new(buf, index)?;
                     let color_type = ihdr.color;
                     let data;
                     match color_type {
-                        0 => {
-                            data = tRNS::tRNS0(buf.pread_with(index + 8, scroll::BE)?);
+                        1 => {
+                            data = tRNS::tRNS0(buf.pread_with(index + 8, scroll::BE)
+                                               .map_err(|e| Problem::Msg(format!("Could not read tRNS chunk: {}", e)))?);
                         },
                         2 => {
-                            data = tRNS::tRNS2(buf.pread_with(index + 8, scroll::BE)?);
+                            data = tRNS::tRNS2(buf.pread_with(index + 8, scroll::BE)
+                                               .map_err(|e| Problem::Msg(format!("Could not read tRNS chunk: {}", e)))?);
                         },
                         3 => {
                             let mut alpha = Vec::with_capacity(prefix.size as usize);
@@ -699,79 +744,90 @@ impl Png {
                             data = tRNS::tRNS3(Trns3{ alpha });
                         },
                         _ => {
-                            panic!("Invalid color type for tRNS");
+                            return Err(Error::from(Problem::Msg(format!("Invalid color type: {} for tRNS", color_type))))
                         },
                     }
                     trns = Some(Trns {
                         prefix,
                         data,
-                        postfix: buf.pread_with(index + size + 8, scroll::BE)?,
+                        postfix: Postfix::new(buf, index + size + 8)?,
                     });
                 },
                 "zTXt" => {
-                    let keyword = buf.pread::<&str>(index + 8)?.to_string();
+                    let keyword = buf.pread::<&str>(index + 8)
+                        .map_err(|e| Problem::Msg(format!("Could not read keyword field of zTXt chunk: {}", e)))?.to_string();
                     let comp_text = buf[index + 10 + keyword.len()..index + size + 8].to_vec();
-                    let comp_method: u8 = buf.pread(index + 9 + keyword.len())?;
+                    let comp_method: u8 = buf.pread(index + 9 + keyword.len())
+                        .map_err(|e| Problem::Msg(format!("Could not read compression method field of zTXt chunk: {}", e)))?;
 
                     let ztxt_chunk = Ztxt {
-                        prefix: buf.pread_with(index, scroll::BE)?,
+                        prefix: Prefix::new(buf, index)?,
                         keyword,
                         comp_method,
                         comp_text,
-                        postfix: buf.pread_with(index + size + 8, scroll::BE)?,
+                        postfix: Postfix::new(buf, index + size + 8)?,
                     };
 
                     ztxt.push(ztxt_chunk);
 
                 },
                 "sRGB" => {
-                    srgb = Some(buf.pread_with(index, scroll::BE)?);
+                    srgb = Some(buf.pread_with(index, scroll::BE)
+                                .map_err(|e| Problem::Msg(format!("Could not read sRGB chunk: {}", e)))?);
                 },
                 "iCCP" => {
-                    let profile = buf.pread::<&str>(index + 8)?.to_string();
+                    let profile = buf.pread::<&str>(index + 8)
+                        .map_err(|e| Problem::Msg(format!("Could not read profile field of iCCP chunk: {}", e)))?.to_string();
                     let comp_profile = buf[index + 10 + profile.len()..index + size + 8].to_vec();
-                    let comp_method: u8 = buf.pread(index + 9 + profile.len())?;
+                    let comp_method: u8 = buf.pread(index + 9 + profile.len())
+                        .map_err(|e| Problem::Msg(format!("Could not read compression method field of iCCP chunk: {}", e)))?;
 
                     iccp = Some(Iccp {
-                        prefix: buf.pread_with(index, scroll::BE)?,
+                        prefix: Prefix::new(buf, index)?,
                         profile,
                         comp_method,
                         comp_profile,
-                        postfix: buf.pread_with(index + size + 8, scroll::BE)?,
+                        postfix: Postfix::new(buf, index + size + 8)?,
                     });
 
                 },
                 "iTXt" => {
-                    let keyword     = buf.pread::<&str>(index + 8)?.to_string();
-                    let comp_flag   = buf.pread(index + 9 + keyword.len())?;
-                    let comp_method = buf.pread(index + 10 + keyword.len())?;
+                    let keyword     = buf.pread::<&str>(index + 8)
+                        .map_err(|e| Problem::Msg(format!("Could not read keyword field of iTXt chunk: {}", e)))?.to_string();
+                    let comp_flag   = buf.pread(index + 9 + keyword.len())
+                        .map_err(|e| Problem::Msg(format!("Could not read compression flag field of iTXt chunk: {}", e)))?;
+                    let comp_method = buf.pread(index + 10 + keyword.len())
+                        .map_err(|e| Problem::Msg(format!("Could not read compression method field of iTXt chunk: {}", e)))?;
 
-                    let lang_tag = buf.pread::<&str>(index + 11 + keyword.len())?.to_string();
-                    let trans_keyword = buf.pread::<&str>(
-                            index + 12 + keyword.len() + lang_tag.len())?.to_string();
+                    let lang_tag = buf.pread::<&str>(index + 11 + keyword.len())
+                        .map_err(|e| Problem::Msg(format!("Could not read language tag field of iTXt chunk: {}", e)))?.to_string();
+                    let trans_keyword = buf.pread::<&str>(index + 12 + keyword.len() + lang_tag.len())
+                        .map_err(|e| Problem::Msg(format!("Could not read translated keyword field of iTXt chunk: {}", e)))?.to_string();
                     let comp_text =
                         buf[index + 13 + keyword.len() + lang_tag.len() + trans_keyword.len()
                             ..index + size + 8].to_vec();
 
 
                     let itxt_chunk = Itxt {
-                        prefix: buf.pread_with(index, scroll::BE)?,
+                        prefix: Prefix::new(buf, index)?,
                         keyword,
                         comp_flag,
                         comp_method,
                         lang_tag,
                         trans_keyword,
                         comp_text,
-                        postfix: buf.pread_with(index + size + 8, scroll::BE)?,
+                        postfix: Postfix::new(buf, index + size + 8)?,
                     };
 
                     itxt.push(itxt_chunk);
 
                 },
                 "sPLT" => {
-                    let prefix = buf.pread_with::<Prefix>(index, scroll::BE)?;
-                    let name   = buf.pread::<&str>(index + 8)?.to_string();
-                    let depth  = buf.pread(index + 9 + name.len())?;
+                    let prefix = Prefix::new(buf, index)?;
+                    let name   = buf.pread::<&str>(index + 8)
+                        .map_err(|e| Problem::Msg(format!("Could not read name field of sPLT chunk: {}", e)))?.to_string();
+                    let depth  = buf.pread(index + 9 + name.len())
+                        .map_err(|e| Problem::Msg(format!("Could not read depth field of sPLT chunk: {}", e)))?;
 
                     let length = prefix.size as usize - name.len() - 2;
                     let mut plt;
@@ -780,26 +836,28 @@ impl Png {
 
                         8 => {
                             if length % 6 != 0 {
-                                panic!("sPLT remaining length not divisible by 6");
+                                return Err(Error::from(Problem::Msg(format!("sPLT remaining length not divisible by 6"))));
                             }
                             plt = Vec::with_capacity(length / 6);
                             for _ in 0..length / 6 {
                                 plt.push(sPLT::sPLT8(buf.pread_with::<Splt8>
-                                         (index + 10 + name.len(), scroll::BE)?));
+                                                     (index + 10 + name.len(), scroll::BE)
+                                                     .map_err(|e| Problem::Msg(format!("Could not read sPLT entry: {}", e)))?));
                             }
                         },
                         16 => {
                             if length % 10 != 0 {
-                                panic!("sPLT remaining length not divisible by 10");
+                                return Err(Error::from(Problem::Msg(format!("sPLT remaining length not divisible by 10"))));
                             }
                             plt = Vec::with_capacity(length / 10);
                             for _ in 0..length / 6 {
                                 plt.push(sPLT::sPLT16(buf.pread_with::<Splt16>
-                                        (index + 10 + name.len(), scroll::BE)?));
+                                                      (index + 10 + name.len(), scroll::BE)
+                                                      .map_err(|e| Problem::Msg(format!("Could not read sPLT entry: {}", e)))?));
                             }
                         },
                         _ => {
-                            panic!("Invalid bit depth for sPLT");
+                            return Err(Error::from(Problem::Msg(format!("Invalid bit depth: {} for sPLT", depth))));
                         },
 
                     }
@@ -809,33 +867,42 @@ impl Png {
                         name,
                         depth,
                         plt,
-                        postfix: buf.pread_with(index + size + 8, scroll::BE)?,
+                        postfix: Postfix::new(buf, index + size + 8)?,
                     };
 
                     splt.push(splt_chunk);
 
                 },
                 "oFFs" => {
-                    offs = Some(buf.pread_with(index, scroll::BE)?);
+                    offs = Some(buf.pread_with(index, scroll::BE)
+                                .map_err(|e| Problem::Msg(format!("Could not read oFFs chunk: {}", e)))?);
                 },
                 "pCAL" => {
-                    let prefix   = buf.pread_with::<Prefix>(index, scroll::BE)?;
-                    let name     = buf.pread::<&str>(index + 8)?.to_string();
-                    let org_zero = buf.pread_with(index + 9 + name.len(), scroll::BE)?;
-                    let org_max  = buf.pread_with(index + 13 + name.len(), scroll::BE)?;
-                    let equation = buf.pread_with(index + 17 + name.len(), scroll::BE)?;
-                    let parameters_count = buf.pread_with::<u8>(index + 18 + name.len(), scroll::BE)?;
-                    let unit_name = buf.pread::<&str>(index + 19 + name.len())?.to_string();
+                    let prefix   = Prefix::new(buf, index)?;
+                    let name     = buf.pread::<&str>(index + 8)
+                        .map_err(|e| Problem::Msg(format!("Could not read name field of pCAL chunk: {}", e)))?.to_string();
+                    let org_zero = buf.pread_with(index + 9 + name.len(), scroll::BE)
+                        .map_err(|e| Problem::Msg(format!("Could not read org zero field of pCAL chunk: {}", e)))?;
+                    let org_max  = buf.pread_with(index + 13 + name.len(), scroll::BE)
+                        .map_err(|e| Problem::Msg(format!("Could not read org max field of pCAL chunk: {}", e)))?;
+                    let equation = buf.pread_with(index + 17 + name.len(), scroll::BE)
+                        .map_err(|e| Problem::Msg(format!("Could not read equation field of pCAL chunk: {}", e)))?;
+                    let parameters_count = buf.pread_with::<u8>(index + 18 + name.len(), scroll::BE)
+                        .map_err(|e| Problem::Msg(format!("Could not read parameters count field of pCAL chunk: {}", e)))?;
+                    let unit_name = buf.pread::<&str>(index + 19 + name.len())
+                        .map_err(|e| Problem::Msg(format!("Could not read unit name field of pCAL chunk: {}", e)))?.to_string();
                     let mut parameters = Vec::with_capacity(parameters_count as usize);
 
                     let mut param_length = 0;
 
                     for _ in 0..parameters_count - 1 {
-                        let parameter = buf.pread::<&str>(index + 20 + name.len() + unit_name.len())?.to_string();
+                        let parameter = buf.pread::<&str>(index + 20 + name.len() + unit_name.len())
+                            .map_err(|e| Problem::Msg(format!("Could no read parameter field of pCAL chunk: {}", e)))?.to_string();
                         param_length += parameter.len() + 1;
                         parameters.push(parameter);
                     }
-                    let parameter = std::str::from_utf8(&buf[index + 20 + name.len() + unit_name.len() + param_length..index + size + 8])?.to_string();
+                    let parameter = std::str::from_utf8(&buf[index + 20 + name.len() + unit_name.len() + param_length..index + size + 8])
+                        .map_err(|e| Problem::Msg(format!("Could no read parameter field of pCAL chunk: {}", e)))?.to_string();
                     parameters.push(parameter);
 
                     pcal = Some(Pcal {
@@ -847,28 +914,32 @@ impl Png {
                         parameters_count,
                         unit_name,
                         parameters,
-                        postfix: buf.pread_with(index + size + 8, scroll::BE)?,
+                        postfix: Postfix::new(buf, index + size + 8)?,
                     });
 
                 },
                 "sCAL" => {
-                    let unit = buf.pread(index + 8)?;
-                    let pixel_width = buf.pread::<&str>(index + 9)?.to_string();
-                    let pixel_height = std::str::from_utf8(&buf[index + 10 + pixel_width.len()..index + size + 8])?.to_string();
+                    let unit = buf.pread(index + 8)
+                        .map_err(|e| Problem::Msg(format!("Could not read unit field of sCAL chunk: {}", e)))?;
+                    let pixel_width = buf.pread::<&str>(index + 9)
+                        .map_err(|e| Problem::Msg(format!("Could not read pixel width field of sCAL chunk: {}", e)))?.to_string();
+                    let pixel_height = std::str::from_utf8(&buf[index + 10 + pixel_width.len()..index + size + 8])
+                        .map_err(|e| Problem::Msg(format!("Could not read pixel height field of sCAL chunk: {}", e)))?.to_string();
                     scal = Some(Scal {
-                        prefix: buf.pread_with(index, scroll::BE)?,
+                        prefix: Prefix::new(buf, index)?,
                         unit,
                         pixel_width,
                         pixel_height,
-                        postfix: buf.pread_with(index + size + 8, scroll::BE)?,
+                        postfix: Postfix::new(buf, index + size + 8)?,
                     });
                 },
                 "gIFg" => {
-                    let gifg_chunk = buf.pread_with(index, scroll::BE)?;
+                    let gifg_chunk = buf.pread_with(index, scroll::BE)
+                        .map_err(|e| Problem::Msg(format!("Could not read gIFg chunk: {}", e)))?;
                     gifg.push(gifg_chunk);
                 },
                 "gIFx" => {
-                    let prefix = buf.pread_with(index, scroll::BE)?;
+                    let prefix = Prefix::new(buf, index)?;
                     let mut app_id = [0; 8];
                     app_id.copy_from_slice(&buf[index + 8..index + 16]);
                     let mut app_code = [0; 3];
@@ -879,15 +950,15 @@ impl Png {
                         app_id,
                         app_code,
                         app_data,
-                        postfix: buf.pread_with(index + size + 8, scroll::BE)?,
+                        postfix: Postfix::new(buf, index + size + 8)?,
                     };
                     gifx.push(gifx_chunk);
                 },
                 "sTER" => {
-                    ster = Some(buf.pread_with(index, scroll::BE)?);
+                    ster = Some(buf.pread_with(index, scroll::BE)
+                                .map_err(|e| Problem::Msg(format!("Could not read sTER chunk: {}", e)))?);
                 }
                 _ => {
-                    use ansi_term::Color;
                     eprintln!("Error: {} ",
                               Color::Red.underline().paint(format!("Unsupported chunk: {}", s)));
                 },
@@ -1269,7 +1340,7 @@ impl Png {
             for (_i, chunk) in self.ztxt.iter().enumerate() {
                 fmt_png_header("zTXt", &chunk.prefix, &chunk.postfix);
                 fmt_indentln(format!("Compression method: {}", chunk.comp_method));
-                fmt_indent(format!("{}: ", chunk.keyword));
+                fmt_indent(format!("{}: ", Color::Blue.paint(&chunk.keyword)));
                 for (i, b) in chunk.comp_text.iter().enumerate() {
                     if i % 16 == 0 {
                         println!("");
@@ -1345,7 +1416,7 @@ impl Png {
                 if chunk.comp_flag == 1 {
                     fmt_indentln(format!("Compression method: {}", chunk.comp_method));
 
-                    fmt_indent(format!("{}: ", chunk.keyword));
+                    fmt_indent(format!("{}: ", Color::Blue.paint(&chunk.keyword)));
                     for (i, b) in chunk.comp_text.iter().enumerate() {
                         if i % 16 == 0 {
                             println!("");
