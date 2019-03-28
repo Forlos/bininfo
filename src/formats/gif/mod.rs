@@ -32,7 +32,7 @@ struct Gif_header {
 struct LSD {
     logic_width:        u16,
     logic_height:       u16,
-    //   <Packed Fields>  =
+    // <Packed Fields>  =
     //   Global Color Table Flag       1 Bit
     //   Color Resolution              3 Bits
     //   Sort Flag                     1 Bit
@@ -49,10 +49,105 @@ struct GCT {
     table: Vec<RGB>,
 }
 
+// Local Color Table.
+#[derive(Debug)]
+#[repr(C)]
+struct LCT {
+    table: Vec<RGB>,
+}
+
+const EXTENSION_INTRODUCER:  u8 = 0x21;
+
+const GRAPHIC_CONTROL_LABEL: u8 = 0xF9;
+const COMMENT_LABEL: u8         = 0xFE;
+const PLAIN_TEXT_LABEL: u8      = 0x01;
+const APPLICATION_LABEL: u8 = 0xFF;
+
+// Graphic Control Extension.
+#[derive(Debug, Pread)]
+#[repr(C)]
+struct GC_Ext {
+    ext_intro:        u8,
+    ctrl_label:       u8,
+    block_size:       u8,
+    // <Packed Fields>  =
+    //   Reserved                      3 Bits
+    //   Disposal Method               3 Bits
+    //   User Input Flag               1 Bit
+    //   Transparent Color Flag        1 Bit
+    packet_fields:    u8,
+    delay:            u16,
+    transp_color_idx: u8,
+    block_terminator: u8,
+
+}
+
+#[derive(Debug)]
+#[repr(C)]
+struct Comment_Ext {
+    ext_intro:        u8,
+    ctrl_label:       u8,
+    comment_data:     Vec<u8>,
+    block_terminator: u8,
+}
+
+#[derive(Debug)]
+#[repr(C)]
+struct PT_Ext {
+    ext_intro:        u8,
+    ctrl_label:       u8,
+    block_size:       u8,
+    tg_left_pos:      u16,
+    tg_top_pos:       u16,
+    tg_width:         u16,
+    th_height:        u16,
+    char_cell_width:  u8,
+    char_cell_height: u8,
+    tf_color_idx:     u8,
+    tb_color_idx:     u8,
+    plain_text:       Vec<u8>,
+    block_terminator: u8,
+}
+
+#[derive(Debug)]
+#[repr(C)]
+struct App_Ext {
+    ext_intro:        u8,
+    ctrl_label:       u8,
+    block_size: u8,
+    app_identifier: [u8; 8],
+    app_auth_code: [u8; 3],
+    app_data: Vec<u8>,
+    block_terminator: u8,
+}
+
+const IMAGE_DESCRIPTOR_SEPARATOR: u8 = 0x2c;
+
+#[derive(Debug, Pread)]
+#[repr(C)]
+struct Img_desc {
+    separator:     u8,
+    left_pos:      u16,
+    top_pos:       u16,
+    width:         u16,
+    height:        u16,
+    // <Packed Fields>  =
+    //   Local Color Table Flag        1 Bit
+    //   Interlace Flag                1 Bit
+    //   Sort Flag                     1 Bit
+    //   Reserved                      2 Bits
+    //   Size of Local Color Table     3 Bits
+    packed_fields: u8,
+}
+
 pub struct Gif {
     header: Gif_header,
     lsd:    LSD,
     gct:    Option<GCT>,
+    lct:    Option<LCT>,
+    // img_desc: Img_desc,
+
+    // trailer: u8,
 }
 
 impl Gif {
@@ -70,6 +165,7 @@ impl Gif {
         let sz_gct    = lsd.packed_fields << 5 >> 5;
 
         let mut gct = None;
+        let mut lct = None;
 
         if gctf == 1 {
             let size = 3 * 2_usize.pow(sz_gct as u32 + 1) / 3;
@@ -86,6 +182,7 @@ impl Gif {
             header,
             lsd,
             gct,
+            lct,
         })
 
     }
@@ -94,6 +191,9 @@ impl Gif {
         use ansi_term::Color;
         use prettytable::Table;
 
+        //
+        // GIF file
+        //
         println!("GIF{} width: {}px height: {}px",
                  std::str::from_utf8(&self.header.version)?.to_string(),
                  self.lsd.logic_width,
@@ -107,6 +207,9 @@ impl Gif {
         // Size of Global Color Table
         let sz_gct    = &self.lsd.packed_fields << 5 >> 5;
 
+        //
+        // Logical Screen Descriptor
+        //
         println!("{}", Color::White.underline().paint("Logical Screen Descriptor"));
         fmt_indentln(format!("Logical Screen width:  {}px", self.lsd.logic_width));
         fmt_indentln(format!("Logical Screen height: {}px", self.lsd.logic_height));
@@ -116,6 +219,9 @@ impl Gif {
         fmt_indentln(format!("Size of Global Color Table: {}", sz_gct));
         println!();
 
+        //
+        // Global Color Table
+        //
         if let Some(gct) = &self.gct {
             println!("{}", Color::White.underline().paint("Global Color Table"));
             let mut trimmed = false;
