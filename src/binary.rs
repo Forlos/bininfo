@@ -10,6 +10,7 @@ pub enum Binary {
     Png(png::Png),
     Bmp(bmp::Bmp),
     Elf(elf::Elf),
+    Gif(gif::Gif),
     Unknown,
 }
 
@@ -23,6 +24,7 @@ impl Binary {
             Format::Png => Ok(Binary::Png(png::Png::parse(buf)?)),
             Format::Bmp => Ok(Binary::Bmp(bmp::Bmp::parse(buf)?)),
             Format::Elf => Ok(Binary::Elf(elf::Elf::parse(buf)?)),
+            Format::Gif => Ok(Binary::Gif(gif::Gif::parse(buf)?)),
             Format::Unknown => Ok(Binary::Unknown),
         }
 

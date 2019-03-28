@@ -11,6 +11,7 @@ pub enum Format {
     Png,
     Bmp,
     Elf,
+    Gif,
     Unknown,
 }
 
@@ -43,6 +44,10 @@ fn check_magic(magic: &[u8; MAGIC_SIZE]) -> Result<Format, Error> {
     else if &magic[0..elf::ELF_MAGIC_SIZE] == elf::ELF_MAGIC {
         Ok(Format::Elf)
     }
+    else if &magic[0..gif::GIF_MAGIC_SIZE] == gif::GIF87A_MAGIC
+         || &magic[0..gif::GIF_MAGIC_SIZE] == gif::GIF89A_MAGIC {
+             Ok(Format::Gif)
+        }
     else {
         Ok(Format::Unknown)
     }

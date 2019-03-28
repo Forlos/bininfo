@@ -75,12 +75,15 @@ fn run(file_path: &str) -> Result<(), Error> {
         },
         Binary::Elf(elf) => {
             elf.print()?;
-        }
+        },
+        Binary::Gif(gif) => {
+            gif.print()?;
+        },
         Binary::Unknown  => {
             use ansi_term::Color;
 
-            println!("{}", Color::Black.on(Color::Red).paint("Unknown/unsupported file format"));
-            println!("Check for newest version: {}", "https://github.com/Forlos/bininfo");
+            eprintln!("{}", Color::Black.on(Color::Red).paint("Unknown/unsupported file format"));
+            eprintln!("Check for newest version: {}", "https://github.com/Forlos/bininfo");
         },
     }
 
