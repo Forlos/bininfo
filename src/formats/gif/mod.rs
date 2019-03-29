@@ -155,8 +155,11 @@ impl Gif {
 
     pub fn parse(buf: &[u8]) -> Result<Self, Error> {
 
+        // Error there should't ever happen because we have read 16 bytes when parsing magic.
         let header = buf.pread_with(0, scroll::BE)?;
-        let lsd    = buf.pread_with::<LSD>(GIF_MAGIC_SIZE, scroll::LE)?;
+        // Error there should't ever happen because we have read 16 bytes when parsing magic.
+        let lsd    = buf.pread_with::<LSD>(GIF_MAGIC_SIZE, scroll::LE)
+            .map_err(|e| Problem::Msg(format!("Cannot read logical screen descriptor: {}", e)))?;
 
         // Global Color Table Flag
         let gctf      = lsd.packed_fields >> 7;
@@ -187,7 +190,8 @@ impl Gif {
             index += size * 3;
         }
 
-        let mut identifier: u8 = buf.pread(index)?;
+        let mut identifier: u8 = buf.pread(index)
+            .map_err(|e| Problem::Msg(format!("Cannot read identifier: {}", e)))?;
 
         while identifier != IMAGE_DESCRIPTOR_SEPARATOR {
 
@@ -266,11 +270,13 @@ impl Gif {
 
             }
 
-            identifier = buf.pread(index)?;
+            identifier = buf.pread(index)
+                .map_err(|e| Problem::Msg(format!("Cannot read identifier: {}", e)))?;
 
         }
 
-        let img_desc = buf.pread_with::<Img_desc>(index, scroll::LE)?;
+        let img_desc = buf.pread_with::<Img_desc>(index, scroll::LE)
+            .map_err(|e| Problem::Msg(format!("Cannot read image descriptor: {}", e)))?;
         index += 10;
 
         if (img_desc.packed_fields >> 7) == 1 {
