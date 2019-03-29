@@ -203,6 +203,7 @@ impl super::FileFormat for Gif {
                     match buf.pread::<u8>(index + 1)? {
 
                         GRAPHIC_CONTROL_LABEL => {
+                            gc_ext = Some(buf.pread_with(index, scroll::LE)?);
                             index += 8;
                         },
                         COMMENT_LABEL => {
