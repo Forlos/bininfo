@@ -5,10 +5,10 @@ Warning: Error handling is very basic and hasn't been tested.
 ## Supported formats
 - [x] BMP
 - [x] PNG 1.2, PNGEXT 1.2
-- [ ] GIF
+- [x] GIF
 - [ ] JPG
 - [ ] PDF
-- [ ] ELF
+- [WIP] ELF
 - [ ] PE
 
 ## Resources
