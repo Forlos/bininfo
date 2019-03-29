@@ -1,6 +1,7 @@
 use failure::{Error};
 use scroll::{self, Pread};
 
+use crate::Problem;
 use crate::format::{fmt_indentln};
 
 pub const GIF87A_MAGIC: &'static [u8; GIF_MAGIC_SIZE] = b"GIF87a";
@@ -56,12 +57,13 @@ struct LCT {
     table: Vec<RGB>,
 }
 
-const EXTENSION_INTRODUCER:  u8 = 0x21;
+const IMAGE_DESCRIPTOR_SEPARATOR: u8 = 0x2c;
+const EXTENSION_INTRODUCER: u8       = 0x21;
 
 const GRAPHIC_CONTROL_LABEL: u8 = 0xF9;
 const COMMENT_LABEL: u8         = 0xFE;
 const PLAIN_TEXT_LABEL: u8      = 0x01;
-const APPLICATION_LABEL: u8 = 0xFF;
+const APPLICATION_LABEL: u8     = 0xFF;
 
 // Graphic Control Extension.
 #[derive(Debug, Pread)]
@@ -85,17 +87,12 @@ struct GC_Ext {
 #[derive(Debug)]
 #[repr(C)]
 struct Comment_Ext {
-    ext_intro:        u8,
-    ctrl_label:       u8,
-    comment_data:     Vec<u8>,
-    block_terminator: u8,
+    comment_data:     Vec<String>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Pread)]
 #[repr(C)]
-struct PT_Ext {
-    ext_intro:        u8,
-    ctrl_label:       u8,
+struct PT_Ext_header {
     block_size:       u8,
     tg_left_pos:      u16,
     tg_top_pos:       u16,
@@ -105,23 +102,22 @@ struct PT_Ext {
     char_cell_height: u8,
     tf_color_idx:     u8,
     tb_color_idx:     u8,
-    plain_text:       Vec<u8>,
-    block_terminator: u8,
 }
 
 #[derive(Debug)]
 #[repr(C)]
-struct App_Ext {
-    ext_intro:        u8,
-    ctrl_label:       u8,
-    block_size: u8,
-    app_identifier: [u8; 8],
-    app_auth_code: [u8; 3],
-    app_data: Vec<u8>,
-    block_terminator: u8,
+struct PT_Ext {
+    header:     PT_Ext_header,
+    plain_text: Vec<String>,
 }
 
-const IMAGE_DESCRIPTOR_SEPARATOR: u8 = 0x2c;
+#[derive(Debug, Pread)]
+#[repr(C)]
+struct App_Ext {
+    block_size:       u8,
+    app_identifier:   [u8; 8],
+    app_auth_code:    [u8; 3],
+}
 
 #[derive(Debug, Pread)]
 #[repr(C)]
@@ -141,11 +137,16 @@ struct Img_desc {
 }
 
 pub struct Gif {
-    header: Gif_header,
-    lsd:    LSD,
-    gct:    Option<GCT>,
-    lct:    Option<LCT>,
-    // img_desc: Img_desc,
+    header:   Gif_header,
+    lsd:      LSD,
+    gct:      Option<GCT>,
+    img_desc: Img_desc,
+    lct:      Option<LCT>,
+
+    gc_ext:      Option<GC_Ext>,
+    comment_ext: Option<Comment_Ext>,
+    pt_ext:      Option<PT_Ext>,
+    app_ext:     Option<App_Ext>,
 
     // trailer: u8,
 }
@@ -159,23 +160,130 @@ impl Gif {
 
         // Global Color Table Flag
         let gctf      = lsd.packed_fields >> 7;
-        let color_res = lsd.packed_fields << 1 >> 5;
-        let sort_flag = lsd.packed_fields << 4 >> 7;
+        // let color_res = lsd.packed_fields << 1 >> 5;
+        // let sort_flag = lsd.packed_fields << 4 >> 7;
         // Size of Global Color Table
         let sz_gct    = lsd.packed_fields << 5 >> 5;
 
         let mut gct = None;
         let mut lct = None;
 
+        let mut gc_ext      = None;
+        let mut comment_ext = None;
+        let mut pt_ext      = None;
+        let mut app_ext     = None;
+
+        let mut index = GIF_MAGIC_SIZE + LSD_SIZE;
+
         if gctf == 1 {
             let size = 3 * 2_usize.pow(sz_gct as u32 + 1) / 3;
             let mut table = Vec::with_capacity(size);
             for i in 0..size {
-                table.push(buf.pread(GIF_MAGIC_SIZE + LSD_SIZE + i * 3)?)
+                table.push(buf.pread(index + i * 3)?)
             }
             gct = Some(GCT {
                 table,
             });
+            index += size * 3;
+        }
+
+        let mut identifier: u8 = buf.pread(index)?;
+
+        while identifier != IMAGE_DESCRIPTOR_SEPARATOR {
+
+            match identifier {
+
+                EXTENSION_INTRODUCER => {
+
+                    match buf.pread::<u8>(index + 1)? {
+
+                        GRAPHIC_CONTROL_LABEL => {
+                            index += 8;
+                        },
+                        COMMENT_LABEL => {
+                            index += 2;
+                            let mut comment_data = Vec::new();
+                            while buf.pread::<u8>(index)? != 0x00 {
+                                let size = buf.pread::<u8>(index + 1)? as usize;
+                                let data = std::str::from_utf8(&buf[index + 2..index + 2 + size])?.to_string();
+                                comment_data.push(data);
+                                index += size + 1;
+                            }
+                            index += 1;
+                            // If this chunk is malformed this prevent program from crashing
+                            while buf.pread::<u8>(index)? == 0x00 {
+                                index += 1;
+                            }
+
+                            comment_ext = Some(Comment_Ext {
+                                comment_data,
+                            });
+                        },
+                        PLAIN_TEXT_LABEL => {
+                            index += 2;
+                            let header = buf.pread_with(index, scroll::LE)?;
+                            index += 13;
+                            let mut plain_text = Vec::new();
+                            while buf.pread::<u8>(index)? != 0x00 {
+                                let size = buf.pread::<u8>(index + 1)? as usize;
+                                let data = std::str::from_utf8(&buf[index + 2..index + 2 + size])?.to_string();
+                                plain_text.push(data);
+                                index += size + 1;
+                            }
+                            index += 1;
+                            // If this chunk is malformed this prevent program from crashing
+                            while buf.pread::<u8>(index)? == 0x00 {
+                                index += 1;
+                            }
+                            pt_ext = Some(PT_Ext {
+                                header,
+                                plain_text,
+                            });
+                        },
+                        APPLICATION_LABEL => {
+                            index += 2;
+                            app_ext = Some(buf.pread_with(index, scroll::LE)?);
+                            index += 12;
+                            while buf.pread::<u8>(index)? != 0x00 {
+                                index += buf.pread::<u8>(index)? as usize + 1;
+                            }
+                            index += 1;
+                            // If this chunk is malformed this prevent program from crashing
+                            while buf.pread::<u8>(index)? == 0x00 {
+                                index += 1;
+                            }
+                        },
+                        _ => {
+                            return Err(Error::from(Problem::Msg(format!("Unsupported extension at: {:#X}", index + 1))));
+                        }
+
+                    }
+
+                },
+                _ => {
+                    return Err(Error::from(Problem::Msg(format!("Unsupported extension at: {:#X}", index))));
+                }
+
+            }
+
+            identifier = buf.pread(index)?;
+
+        }
+
+        let img_desc = buf.pread_with::<Img_desc>(index, scroll::LE)?;
+        index += 10;
+
+        if (img_desc.packed_fields >> 7) == 1 {
+            let sz_lct = img_desc.packed_fields << 5 >> 5;
+            let size = 3 * 2_usize.pow(sz_lct as u32 + 1) / 3;
+            let mut table = Vec::with_capacity(size);
+            for i in 0..size {
+                table.push(buf.pread(index + i * 3)?);
+            }
+            lct = Some(LCT {
+                table,
+            });
+            // index += size * 3;
         }
 
         Ok(Gif {
@@ -183,6 +291,12 @@ impl Gif {
             lsd,
             gct,
             lct,
+            img_desc,
+
+            gc_ext,
+            comment_ext,
+            pt_ext,
+            app_ext,
         })
 
     }
@@ -211,12 +325,12 @@ impl Gif {
         // Logical Screen Descriptor
         //
         println!("{}", Color::White.underline().paint("Logical Screen Descriptor"));
-        fmt_indentln(format!("Logical Screen width:  {}px", self.lsd.logic_width));
-        fmt_indentln(format!("Logical Screen height: {}px", self.lsd.logic_height));
-        fmt_indentln(format!("Global Color Table Flag:    {}", gctf));
-        fmt_indentln(format!("Color Resolution:           {}", color_res));
-        fmt_indentln(format!("Sort Flag:                  {}", sort_flag));
-        fmt_indentln(format!("Size of Global Color Table: {}", sz_gct));
+        fmt_indentln(format!("Logical screen width:  {}px", self.lsd.logic_width));
+        fmt_indentln(format!("Logical screen height: {}px", self.lsd.logic_height));
+        fmt_indentln(format!("Global color table flag:    {}", gctf));
+        fmt_indentln(format!("Color resolution:           {}", color_res));
+        fmt_indentln(format!("Sort flag:                  {}", sort_flag));
+        fmt_indentln(format!("Size of global color table: {}", sz_gct));
         println!();
 
         //
@@ -249,6 +363,96 @@ impl Gif {
             }
             println!();
         }
+
+        //
+        // Graphic Control Extension
+        //
+        if let Some(gc_ext) = &self.gc_ext {
+            println!("{}", Color::White.underline().paint("Graphic Control Extension"));
+            fmt_indentln(format!("Block size: {}", gc_ext.block_size));
+            fmt_indentln(format!("Reserved: {}", gc_ext.packet_fields >> 5));
+            fmt_indentln(format!("Disposal method: {}", gc_ext.packet_fields << 3 >> 5));
+            fmt_indentln(format!("User input flag: {}", gc_ext.packet_fields & 0b00000010));
+            fmt_indentln(format!("Transparent color flag: {}", gc_ext.packet_fields & 0b00000001));
+            fmt_indentln(format!("Transparent color idx: {}", gc_ext.transp_color_idx));
+            println!();
+        }
+
+        //
+        // Comment Extension
+        //
+        if let Some(comment_ext) = &self.comment_ext {
+            println!("{}", Color::White.underline().paint("Comment Extension"));
+            println!();
+        }
+
+        //
+        // Plain Text Extension
+        //
+        if let Some(pt_ext) = &self.pt_ext {
+            println!("{}", Color::White.underline().paint("Plain Text Extension"));
+            println!();
+        }
+
+        //
+        // Application Extension
+        //
+        if let Some(app_ext) = &self.app_ext {
+            println!("{}", Color::White.underline().paint("Application Extension"));
+            fmt_indentln(format!("Block size: {}", app_ext.block_size));
+            fmt_indentln(format!("Application identifier: {}",
+                                 Color::Blue.paint(std::str::from_utf8(&app_ext.app_identifier)?)));
+            fmt_indentln(format!("Application auth code:  {}",
+                                 Color::Blue.paint(std::str::from_utf8(&app_ext.app_auth_code)?)));
+            println!();
+        }
+
+        //
+        // Image Descriptor
+        //
+        println!("{}", Color::White.underline().paint("Image Descriptor"));
+        fmt_indentln(format!("Image left position: {}", self.img_desc.left_pos));
+        fmt_indentln(format!("Image top position:  {}", self.img_desc.top_pos));
+        fmt_indentln(format!("Image width:  {}", self.img_desc.width));
+        fmt_indentln(format!("Image height: {}", self.img_desc.height));
+        fmt_indentln(format!("Local color table flag:    {}", self.img_desc.packed_fields >> 7));
+        fmt_indentln(format!("Interlace flag:            {}", self.img_desc.packed_fields << 1 >> 7));
+        fmt_indentln(format!("Sort flag:                 {}", self.img_desc.packed_fields << 2 >> 7));
+        fmt_indentln(format!("Reserved:                  {}", self.img_desc.packed_fields << 3 >> 6));
+        fmt_indentln(format!("Size of local color table: {}", self.img_desc.packed_fields & 0b00000111));
+        println!();
+
+        //
+        // Local Color Table
+        //
+        if let Some(lct) = &self.lct {
+            println!("{}", Color::White.underline().paint("Local Color Table"));
+            let mut trimmed = false;
+            let mut table = Table::new();
+            let format = prettytable::format::FormatBuilder::new()
+                .column_separator(' ')
+                .borders(' ')
+                .padding(1, 1)
+                .build();
+            table.set_format(format);
+            table.add_row(row![r->"Idx", rFr->"Red", rFg->"Green", rFb->"Blue"]);
+            for (i, rgb) in lct.table.iter().enumerate() {
+                table.add_row(row![r->i,
+                                   rFr->format!("{:#04X}", rgb.red),
+                                   rFg->format!("{:#04X}", rgb.green),
+                                   rFb->format!("{:#04X}", rgb.blue)]);
+                if i == TRIM_INDEX {
+                    trimmed = true;
+                    break;
+                }
+            }
+            table.printstd();
+            if trimmed {
+                fmt_indentln(format!("Output trimmed..."));
+            }
+            println!();
+        }
+
 
 
         Ok(())

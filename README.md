@@ -19,6 +19,9 @@ Warning: Error handling is very basic and hasn't been tested.
 ### Elf
 - https://github.com/m4b/goblin
 
+### Gif
+- https://www.w3.org/Graphics/GIF/spec-gif89a.txt
+
 ### Png
 - http://www.libpng.org/pub/png/pngsuite.html
 - http://www.libpng.org/pub/png/png-sitemap.html#images
