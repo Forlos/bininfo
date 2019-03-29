@@ -151,9 +151,10 @@ pub struct Gif {
     // trailer: u8,
 }
 
-impl Gif {
+impl super::FileFormat for Gif {
+    type Item = Self;
 
-    pub fn parse(buf: &[u8]) -> Result<Self, Error> {
+    fn parse(buf: &[u8]) -> Result<Self, Error> {
 
         // Error there should't ever happen because we have read 16 bytes when parsing magic.
         let header = buf.pread_with(0, scroll::BE)?;
@@ -307,7 +308,7 @@ impl Gif {
 
     }
 
-    pub fn print(&self) -> Result<(), Error> {
+    fn print(&self) -> Result<(), Error> {
         use ansi_term::Color;
         use prettytable::Table;
 

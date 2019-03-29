@@ -511,9 +511,10 @@ pub struct Png {
     ster: Option<Ster>,
 }
 
-impl Png {
+impl super::FileFormat for Png {
+    type Item = Self;
 
-    pub fn parse(buf: &[u8]) -> Result<Self, Error> {
+    fn parse(buf: &[u8]) -> Result<Self, Error> {
 
         const CHUNK_SIZE: usize = 12;
         let mut data = Vec::new();
@@ -1031,7 +1032,7 @@ impl Png {
 
     }
 
-    pub fn print(&self) -> Result<(), Error> {
+    fn print(&self) -> Result<(), Error> {
         use ansi_term::Color;
         use prettytable::Table;
 

@@ -14,6 +14,7 @@ mod format;
 mod formats;
 
 use crate::binary::Binary;
+use crate::formats::FileFormat;
 
 use clap::{
     App,Arg,
@@ -79,6 +80,9 @@ fn run(file_path: &str) -> Result<(), Error> {
         Binary::Gif(gif) => {
             gif.print()?;
         },
+        Binary::Pdf(pdf) => {
+            pdf.print()?;
+        }
         Binary::Unknown  => {
             use ansi_term::Color;
 

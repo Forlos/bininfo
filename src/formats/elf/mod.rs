@@ -700,9 +700,10 @@ pub struct Elf {
     relplt:          Vec<Elf_rel>,
 }
 
-impl Elf {
+impl super::FileFormat for Elf {
+    type Item = Self;
 
-    pub fn parse(buf: &[u8]) -> Result<Self, Error> {
+    fn parse(buf: &[u8]) -> Result<Self, Error> {
 
         let e_ident = buf.pread_with::<E_ident>(0, scroll::BE)?;
         let bit_format = e_ident.ei_class;
@@ -871,7 +872,7 @@ impl Elf {
 
     }
 
-    pub fn print(&self) -> Result<(), Error> {
+    fn print(&self) -> Result<(), Error> {
         use ansi_term::Color;
         use prettytable::{Table};
 
