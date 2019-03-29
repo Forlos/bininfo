@@ -4,7 +4,7 @@ Get information about various binary file formats
 
 Warning: Error handling is very basic and hasn't been tested.
 
-![png_example1](media/screenshot1.png)
+![png_example1](Media/Screenshot1.png)
 
 ## Supported formats
 - [x] BMP
