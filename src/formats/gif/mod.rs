@@ -97,7 +97,7 @@ struct PT_Ext_header {
     tg_left_pos:      u16,
     tg_top_pos:       u16,
     tg_width:         u16,
-    th_height:        u16,
+    tg_height:        u16,
     char_cell_width:  u8,
     char_cell_height: u8,
     tf_color_idx:     u8,
@@ -383,6 +383,9 @@ impl Gif {
         //
         if let Some(comment_ext) = &self.comment_ext {
             println!("{}", Color::White.underline().paint("Comment Extension"));
+            for com in comment_ext.comment_data.iter() {
+                println!("{}", com);
+            }
             println!();
         }
 
@@ -391,6 +394,18 @@ impl Gif {
         //
         if let Some(pt_ext) = &self.pt_ext {
             println!("{}", Color::White.underline().paint("Plain Text Extension"));
+            fmt_indentln(format!("Block size: {}", pt_ext.header.block_size));
+            fmt_indentln(format!("Text grid left position: {}px", pt_ext.header.tg_left_pos));
+            fmt_indentln(format!("Text grid top position:  {}px", pt_ext.header.tg_top_pos));
+            fmt_indentln(format!("Text grid width:  {}px", pt_ext.header.tg_width));
+            fmt_indentln(format!("Text grid height: {}px", pt_ext.header.tg_height));
+            fmt_indentln(format!("Character cell width:  {}px", pt_ext.header.char_cell_width));
+            fmt_indentln(format!("Character cell height: {}px", pt_ext.header.char_cell_height));
+            fmt_indentln(format!("Text foreground color idx: {}", pt_ext.header.tf_color_idx));
+            fmt_indentln(format!("Text background color idx: {}", pt_ext.header.tb_color_idx));
+            for text in pt_ext.plain_text.iter() {
+                fmt_indentln(format!("{}", text));
+            }
             println!();
         }
 
@@ -411,10 +426,10 @@ impl Gif {
         // Image Descriptor
         //
         println!("{}", Color::White.underline().paint("Image Descriptor"));
-        fmt_indentln(format!("Image left position: {}", self.img_desc.left_pos));
-        fmt_indentln(format!("Image top position:  {}", self.img_desc.top_pos));
-        fmt_indentln(format!("Image width:  {}", self.img_desc.width));
-        fmt_indentln(format!("Image height: {}", self.img_desc.height));
+        fmt_indentln(format!("Image left position: {}px", self.img_desc.left_pos));
+        fmt_indentln(format!("Image top position:  {}px", self.img_desc.top_pos));
+        fmt_indentln(format!("Image width:  {}px", self.img_desc.width));
+        fmt_indentln(format!("Image height: {}px", self.img_desc.height));
         fmt_indentln(format!("Local color table flag:    {}", self.img_desc.packed_fields >> 7));
         fmt_indentln(format!("Interlace flag:            {}", self.img_desc.packed_fields << 1 >> 7));
         fmt_indentln(format!("Sort flag:                 {}", self.img_desc.packed_fields << 2 >> 7));
