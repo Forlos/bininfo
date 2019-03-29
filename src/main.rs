@@ -83,6 +83,9 @@ fn run(file_path: &str) -> Result<(), Error> {
         Binary::Pdf(pdf) => {
             pdf.print()?;
         }
+        Binary::Jpg(jpg) => {
+            jpg.print()?;
+        }
         Binary::Unknown  => {
             use ansi_term::Color;
 
