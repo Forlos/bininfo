@@ -86,6 +86,9 @@ fn run(file_path: &str) -> Result<(), Error> {
         Binary::Jpg(jpg) => {
             jpg.print()?;
         }
+        Binary::Pe(pe) => {
+            pe.print()?;
+        }
         Binary::Unknown  => {
             use ansi_term::Color;
 

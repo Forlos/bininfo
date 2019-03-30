@@ -14,6 +14,7 @@ pub enum Format {
     Gif,
     Pdf,
     Jpg,
+    Pe,
     Unknown,
 }
 
@@ -57,6 +58,9 @@ fn check_magic(magic: &[u8; MAGIC_SIZE]) -> Result<Format, Error> {
         || &magic[0..jpg::JPG_MAGIC_SIZE] == jpg::JPG_MAGIC_2 {
             Ok(Format::Jpg)
         }
+    else if &magic[0..pe::PE_MAGIC_SIZE] == pe::PE_MAGIC {
+        Ok(Format::Pe)
+    }
     else {
         Ok(Format::Unknown)
     }

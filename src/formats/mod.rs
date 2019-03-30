@@ -4,6 +4,7 @@ pub mod elf;
 pub mod gif;
 pub mod pdf;
 pub mod jpg;
+pub mod pe;
 
 use failure::{Error};
 
