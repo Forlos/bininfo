@@ -691,10 +691,20 @@ impl From<Elf_rela_32> for Elf_rela {
 #[derive(Debug)]
 #[repr(C)]
 struct Elf_note {
-    n_type: u64,
+    n_type: u32,
     name:   String,
     desc:   Vec<u8>,
 }
+
+pub const NT_GNU_ABI_TAG: u32 = 1;
+pub const ELF_NOTE_ABI: u32 = NT_GNU_ABI_TAG;
+pub const ELF_NOTE_OS_LINUX: u32 = 0;
+pub const ELF_NOTE_OS_GNU: u32 = 1;
+pub const ELF_NOTE_OS_SOLARIS2: u32 = 2;
+pub const ELF_NOTE_OS_FREEBSD: u32 = 3;
+pub const NT_GNU_HWCAP: u32 = 2;
+pub const NT_GNU_BUILD_ID: u32 = 3;
+pub const NT_GNU_GOLD_VERSION: u32 = 4;
 
 impl Elf_note {
 
@@ -821,15 +831,15 @@ impl super::FileFormat for Elf {
                     }
                     if head.sh_type == SHT_NOTE {
                         let mut offset = head.sh_offset as usize;
-                        let namesz = buf.pread::<u32>(offset)?;
-                        let descsz = buf.pread::<u32>(offset + 4)?;
-                        let n_type = buf.pread::<u32>(offset + 8)?;
+                        let namesz = buf.pread_with::<u32>(offset, endianness)?;
+                        let descsz = buf.pread_with::<u32>(offset + 4, endianness)?;
+                        let n_type = buf.pread_with::<u32>(offset + 8, endianness)?;
                         let name = buf.pread_with::<&str>(offset + 12, ctx::StrCtx::Length(namesz as usize - 1))?.to_string();
                         offset += 13;
-                        offset = align(4, offset);
+                        offset = align(8, offset);
                         let desc = buf.pread_with::<&[u8]>(offset, descsz as usize)?.to_vec();
                         notes.push( Elf_note {
-                            n_type: n_type as u64,
+                            n_type,
                             name,
                             desc,
                         });
@@ -896,16 +906,17 @@ impl super::FileFormat for Elf {
                         }
                     }
                     if head.sh_type == SHT_NOTE {
+                        // Dunno why but it works that way. Is the 64bit version of this header not used?
                         let mut offset = head.sh_offset as usize;
-                        let namesz = buf.pread::<u32>(offset)?;
-                        let descsz = buf.pread::<u32>(offset + 8)?;
-                        let n_type = buf.pread::<u32>(offset + 16)?;
-                        let name = buf.pread_with::<&str>(offset + 24, ctx::StrCtx::Length(namesz as usize - 1))?.to_string();
-                        offset += 25;
-                        offset = align(8, offset);
+                        let namesz = buf.pread_with::<u32>(offset, endianness)?;
+                        let descsz = buf.pread_with::<u32>(offset + 4, endianness)?;
+                        let n_type = buf.pread_with::<u32>(offset + 8, endianness)?;
+                        let name = buf.pread_with::<&str>(offset + 12, ctx::StrCtx::Length(namesz as usize - 1))?.to_string();
+                        offset += 13;
+                        offset = align(4, offset);
                         let desc = buf.pread_with::<&[u8]>(offset, descsz as usize)?.to_vec();
                         notes.push( Elf_note {
-                            n_type: n_type as u64,
+                            n_type,
                             name,
                             desc,
                         });
@@ -1000,6 +1011,7 @@ impl super::FileFormat for Elf {
                 }
                 println!();
             }
+            println!();
         }
 
         //
