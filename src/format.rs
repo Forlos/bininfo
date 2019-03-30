@@ -23,7 +23,7 @@ pub fn fmt_png_header(name: &'static str, prefix: &Prefix, postfix: &Postfix) {
 }
 
 use crate::formats::elf::{
-    Elf_header, Elf_symbol_header, Elf_section_header, Elf_rel,
+    Elf_header, Elf_symbol_header, Elf_section_header, Elf_rel, Elf_rela,
     ET_REL, ET_EXEC, ET_DYN, ET_CORE,
     STB_LOCAL, STB_GLOBAL, STB_WEAK,
     STT_OBJECT, STT_FUNC, STT_SECTION, STT_FILE, STT_GNU_IFUNC,
@@ -165,6 +165,37 @@ pub fn fmt_elf_rel_table(rel: &Vec<Elf_rel>, dynsym: &Vec<Elf_symbol_header>, dy
             Fr->format!("{:>#16X}", header.r_offset),
             r_to_str(header.r_info as u32 & 0xFF, machine),
             Fy->fill(dynstr.pread::<&str>(dynsym[info].st_name as usize)?, term_width),
+        ]);
+    }
+    table.printstd();
+
+    Ok(())
+
+}
+
+pub fn fmt_elf_rela_table(rela: &Vec<Elf_rela>, dynsym: &Vec<Elf_symbol_header>, dynstr: &Vec<u8>, machine: u16) -> Result<(), Error>{
+    use ansi_term::Color;
+    use textwrap::{fill, termwidth};
+
+    let term_width = termwidth() / 2;
+
+    let mut table = Table::new();
+    let format = prettytable::format::FormatBuilder::new()
+        .column_separator(' ')
+        .borders(' ')
+        .padding(1, 1)
+        .build();
+    table.set_format(format);
+    table.add_row(row![r->"Offset", "Type", "Name+addend"]);
+    for header in rela {
+
+        let info = header.r_info as usize >> 32;
+        let name = dynstr.pread::<&str>(dynsym[info].st_name as usize)?;
+
+        table.add_row(row![
+            Fr->format!("{:>#16X}", header.r_offset),
+            r_to_str(header.r_info as u32 & 0xFF, machine),
+            fill(&format!("{}+{}", Color::Yellow.paint(name), Color::Red.paint(format!("{}", header.r_addend))), term_width),
         ]);
     }
     table.printstd();

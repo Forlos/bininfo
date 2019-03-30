@@ -10,7 +10,7 @@ use failure::{
 };
 
 use crate::Problem;
-use crate::format::{fmt_elf, fmt_elf_sym_table, fmt_elf_rel_table, align, fmt_indent};
+use crate::format::{fmt_elf, fmt_elf_sym_table, fmt_elf_rel_table, fmt_elf_rela_table, align, fmt_indent};
 
 pub const ELF_MAGIC: &'static [u8; ELF_MAGIC_SIZE] = b"\x7FELF";
 pub const ELF_MAGIC_SIZE: usize = 4;
@@ -738,6 +738,9 @@ pub struct Elf {
     reldyn:          Vec<Elf_rel>,
     relplt:          Vec<Elf_rel>,
 
+    reladyn:         Vec<Elf_rela>,
+    relaplt:         Vec<Elf_rela>,
+
     notes:           Vec<Elf_note>,
 }
 
@@ -765,6 +768,8 @@ impl super::FileFormat for Elf {
         let mut dynstr = Vec::new();
         let mut reldyn = Vec::new();
         let mut relplt = Vec::new();
+        let mut reladyn = Vec::new();
+        let mut relaplt = Vec::new();
         let mut notes  = Vec::new();
 
         match bit_format {
@@ -844,6 +849,22 @@ impl super::FileFormat for Elf {
                             desc,
                         });
                     }
+                    if head.sh_type == SHT_RELA {
+                        if sh_strtab.pread::<&str>(head.sh_name as usize)? == ".rela.dyn" {
+                            let size = head.sh_size as usize / head.sh_entsize as usize;
+                            reladyn = Vec::with_capacity(size);
+                            for i in 0..size {
+                                reladyn.push(Elf_rela::from(buf.pread_with::<Elf_rela_32>(head.sh_offset as usize + i * head.sh_entsize as usize, endianness)?));
+                            }
+                        }
+                        if sh_strtab.pread::<&str>(head.sh_name as usize)? == ".rela.plt" {
+                            let size = head.sh_size as usize / head.sh_entsize as usize;
+                            relaplt = Vec::with_capacity(size);
+                            for i in 0..size {
+                                relaplt.push(Elf_rela::from(buf.pread_with::<Elf_rela_32>(head.sh_offset as usize + i * head.sh_entsize as usize, endianness)?));
+                            }
+                        }
+                    }
                 }
 
             },
@@ -921,6 +942,22 @@ impl super::FileFormat for Elf {
                             desc,
                         });
                     }
+                    if head.sh_type == SHT_RELA {
+                        if sh_strtab.pread::<&str>(head.sh_name as usize)? == ".rela.dyn" {
+                            let size = head.sh_size as usize / head.sh_entsize as usize;
+                            reladyn = Vec::with_capacity(size);
+                            for i in 0..size {
+                                reladyn.push(buf.pread_with::<Elf_rela>(head.sh_offset as usize + i * head.sh_entsize as usize, endianness)?);
+                            }
+                        }
+                        if sh_strtab.pread::<&str>(head.sh_name as usize)? == ".rela.plt" {
+                            let size = head.sh_size as usize / head.sh_entsize as usize;
+                            relaplt = Vec::with_capacity(size);
+                            for i in 0..size {
+                                relaplt.push(buf.pread_with::<Elf_rela>(head.sh_offset as usize + i * head.sh_entsize as usize, endianness)?);
+                            }
+                        }
+                    }
                 }
 
             },
@@ -944,6 +981,9 @@ impl super::FileFormat for Elf {
 
             reldyn,
             relplt,
+
+            reladyn,
+            relaplt,
 
             notes,
         })
@@ -1105,6 +1145,28 @@ impl super::FileFormat for Elf {
                  self.relplt.len());
         if self.relplt.len() > 0 {
             fmt_elf_rel_table(&self.relplt, &self.dynsym, &self.dynstr, self.header.e_machine)?;
+        }
+        println!();
+
+        //
+        // RelaDyn table
+        //
+        println!("{}({})",
+                 Color::White.paint("RelaDynTable"),
+                 self.reladyn.len());
+        if self.reladyn.len() > 0 {
+            fmt_elf_rela_table(&self.reladyn, &self.dynsym, &self.dynstr, self.header.e_machine)?;
+        }
+        println!();
+
+        //
+        // RelaPlt table
+        //
+        println!("{}({})",
+                 Color::White.paint("RelaPltTable"),
+                 self.relaplt.len());
+        if self.relaplt.len() > 0 {
+            fmt_elf_rela_table(&self.relaplt, &self.dynsym, &self.dynstr, self.header.e_machine)?;
         }
         println!();
 
