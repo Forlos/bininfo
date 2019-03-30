@@ -22,6 +22,7 @@ Warning: Error handling is very basic and hasn't been tested.
 
 ### Elf
 - https://github.com/m4b/goblin
+- http://www.skyfree.org/linux/references/ELF_Format.pdf
 
 ### Gif
 - https://www.w3.org/Graphics/GIF/spec-gif89a.txt

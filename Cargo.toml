@@ -1,8 +1,9 @@
 [package]
 name = "bininfo"
-version = "0.1.0"
-authors = ["forlos"]
+version = "0.2.0"
+authors = ["Forlos <forlos@disroot.org>"]
 edition = "2018"
+publish = false
 
 [dependencies]
 ansi_term      = "0.11"
