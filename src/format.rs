@@ -86,6 +86,9 @@ pub fn fmt_elf_flags(flags: u32) -> String {
 }
 
 pub fn fmt_elf_sym_table(symtab: &Vec<Elf_symbol_header>, symstr: &Vec<u8>, section_headers: &Vec<Elf_section_header>, sh_strtab: &Vec<u8>) -> Result<(), Error> {
+    use textwrap::{fill, termwidth};
+
+    let term_width = termwidth() / 2;
 
     let mut table = Table::new();
     let format = prettytable::format::FormatBuilder::new()
@@ -118,11 +121,13 @@ pub fn fmt_elf_sym_table(symtab: &Vec<Elf_symbol_header>, symstr: &Vec<u8>, sect
             }
         };
 
+        let symbol = symstr.pread::<&str>(header.st_name as usize)?;
+
         table.add_row(Row::new(vec![
             Cell::new(&format!("{:>#16X}", header.st_value)).style_spec("Frr"),
             bind_cell,
             typ_cell,
-            Cell::new(symstr.pread::<&str>(header.st_name as usize)?).style_spec("Fy"),
+            Cell::new(&fill(symbol, term_width)).style_spec("Fy"),
             Cell::new(if (header.st_shndx as usize) < (section_headers.len()) {
                 sh_strtab.pread::<&str>(section_headers[header.st_shndx as usize].sh_name as usize)?
             }
@@ -140,6 +145,9 @@ pub fn fmt_elf_sym_table(symtab: &Vec<Elf_symbol_header>, symstr: &Vec<u8>, sect
 }
 
 pub fn fmt_elf_rel_table(rel: &Vec<Elf_rel>, dynsym: &Vec<Elf_symbol_header>, dynstr: &Vec<u8>, machine: u16) -> Result<(), Error>{
+    use textwrap::{fill, termwidth};
+
+    let term_width = termwidth() / 2;
 
     let mut table = Table::new();
     let format = prettytable::format::FormatBuilder::new()
@@ -156,11 +164,19 @@ pub fn fmt_elf_rel_table(rel: &Vec<Elf_rel>, dynsym: &Vec<Elf_symbol_header>, dy
         table.add_row(row![
             Fr->format!("{:>#16X}", header.r_offset),
             r_to_str(header.r_info as u32 & 0xFF, machine),
-            Fy->dynstr.pread::<&str>(dynsym[info].st_name as usize)?,
+            Fy->fill(dynstr.pread::<&str>(dynsym[info].st_name as usize)?, term_width),
         ]);
     }
     table.printstd();
 
     Ok(())
 
+}
+
+pub fn align(alignment: usize, mut offset: usize) -> usize {
+    let diff = offset % alignment;
+    if diff != 0 {
+        offset += alignment - diff;
+    }
+    offset
 }

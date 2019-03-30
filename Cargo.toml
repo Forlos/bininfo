@@ -11,3 +11,4 @@ failure        = "0.1"
 prettytable-rs = "0.8"
 scroll         = "0.9"
 scroll_derive  = "0.9"
+textwrap       = { version = "0.11", features = ["term_size"] }

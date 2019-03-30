@@ -7,6 +7,7 @@ extern crate scroll;
 extern crate scroll_derive;
 #[macro_use]
 extern crate failure;
+extern crate textwrap;
 
 mod magic;
 mod binary;

@@ -3,13 +3,14 @@
 include!("constants_header.rs");
 include!("constants_relocation.rs");
 
-use scroll::{self, Pread};
+use scroll::{self, Pread, ctx};
 
 use failure::{
     Error,
 };
 
-use crate::format::{fmt_elf, fmt_elf_sym_table, fmt_elf_rel_table};
+use crate::Problem;
+use crate::format::{fmt_elf, fmt_elf_sym_table, fmt_elf_rel_table, align, fmt_indent};
 
 pub const ELF_MAGIC: &'static [u8; ELF_MAGIC_SIZE] = b"\x7FELF";
 pub const ELF_MAGIC_SIZE: usize = 4;
@@ -105,6 +106,7 @@ const PF_W: u32 = 1 << 1;
 // Segment is readable
 const PF_R: u32 = 1 << 2;
 
+#[inline]
 pub fn pt_to_str(pt: u32) -> &'static str {
     match pt {
         PT_NULL => "PT_NULL",
@@ -277,6 +279,7 @@ pub const SHF_FLAGS: [u32; SHF_NUM_REGULAR_FLAGS] = [
     SHF_ORDERED,
 ];
 
+#[inline]
 pub fn sht_to_str(sht: u32) -> &'static str {
     match sht {
         SHT_NULL => "SHT_NULL",
@@ -316,6 +319,7 @@ pub fn sht_to_str(sht: u32) -> &'static str {
     }
 }
 
+#[inline]
 pub fn shf_to_str(shf: u32) -> &'static str {
     match shf {
         SHF_WRITE => "SHF_WRITE",
@@ -684,6 +688,28 @@ impl From<Elf_rela_32> for Elf_rela {
 
 }
 
+#[derive(Debug)]
+#[repr(C)]
+struct Elf_note {
+    n_type: u64,
+    name:   String,
+    desc:   Vec<u8>,
+}
+
+impl Elf_note {
+
+    pub fn type_to_str(&self) -> &'static str {
+        match self.n_type {
+            NT_GNU_ABI_TAG => "NT_GNU_ABI_TAG",
+            NT_GNU_HWCAP => "NT_GNU_HWCAP",
+            NT_GNU_BUILD_ID => "NT_GNU_BUILD_ID",
+            NT_GNU_GOLD_VERSION => "NT_GNU_GOLD_VERSION",
+            _ => "NT_UNKNOWN"
+        }
+    }
+
+}
+
 // const SIZE_OF_SECTION_HEADER_32: usize = 10 * 4;
 // const SIZE_OF_SECTION_HEADER_64: usize = 6 * 8 + 4 * 4;
 
@@ -692,12 +718,17 @@ pub struct Elf {
     program_headers: Vec<Elf_program_header>,
     section_headers: Vec<Elf_section_header>,
     sh_strtab:       Vec<u8>,
+
     symtab:          Vec<Elf_symbol_header>,
     symstr:          Vec<u8>,
+
     dynsym:          Vec<Elf_symbol_header>,
     dynstr:          Vec<u8>,
+
     reldyn:          Vec<Elf_rel>,
     relplt:          Vec<Elf_rel>,
+
+    notes:           Vec<Elf_note>,
 }
 
 impl super::FileFormat for Elf {
@@ -711,7 +742,7 @@ impl super::FileFormat for Elf {
             ELFDATA2LSB => scroll::LE,
             ELFDATA2MSB => scroll::BE,
             _ => {
-                panic!("Invalid EI_DATA");
+                return Err(Error::from(Problem::Msg(format!("Invalid EI_DATA"))));
             },
         };
         let header;
@@ -724,6 +755,7 @@ impl super::FileFormat for Elf {
         let mut dynstr = Vec::new();
         let mut reldyn = Vec::new();
         let mut relplt = Vec::new();
+        let mut notes  = Vec::new();
 
         match bit_format {
 
@@ -787,6 +819,21 @@ impl super::FileFormat for Elf {
                             }
                         }
                     }
+                    if head.sh_type == SHT_NOTE {
+                        let mut offset = head.sh_offset as usize;
+                        let namesz = buf.pread::<u32>(offset)?;
+                        let descsz = buf.pread::<u32>(offset + 4)?;
+                        let n_type = buf.pread::<u32>(offset + 8)?;
+                        let name = buf.pread_with::<&str>(offset + 12, ctx::StrCtx::Length(namesz as usize - 1))?.to_string();
+                        offset += 13;
+                        offset = align(4, offset);
+                        let desc = buf.pread_with::<&[u8]>(offset, descsz as usize)?.to_vec();
+                        notes.push( Elf_note {
+                            n_type: n_type as u64,
+                            name,
+                            desc,
+                        });
+                    }
                 }
 
             },
@@ -848,11 +895,26 @@ impl super::FileFormat for Elf {
                             }
                         }
                     }
+                    if head.sh_type == SHT_NOTE {
+                        let mut offset = head.sh_offset as usize;
+                        let namesz = buf.pread::<u32>(offset)?;
+                        let descsz = buf.pread::<u32>(offset + 8)?;
+                        let n_type = buf.pread::<u32>(offset + 16)?;
+                        let name = buf.pread_with::<&str>(offset + 24, ctx::StrCtx::Length(namesz as usize - 1))?.to_string();
+                        offset += 25;
+                        offset = align(8, offset);
+                        let desc = buf.pread_with::<&[u8]>(offset, descsz as usize)?.to_vec();
+                        notes.push( Elf_note {
+                            n_type: n_type as u64,
+                            name,
+                            desc,
+                        });
+                    }
                 }
 
             },
             _ => {
-                panic!("Invalid EI_CLASS");
+                return Err(Error::from(Problem::Msg(format!("Invalid EI_CLASS"))));
             },
 
         }
@@ -862,12 +924,17 @@ impl super::FileFormat for Elf {
             program_headers,
             section_headers,
             sh_strtab,
+
             symtab,
             symstr,
+
             dynsym,
             dynstr,
+
             reldyn,
             relplt,
+
+            notes,
         })
 
     }
@@ -917,6 +984,23 @@ impl super::FileFormat for Elf {
         }
         table.printstd();
         println!();
+
+        //
+        // Notes
+        //
+        if self.notes.len() > 0 {
+            println!("{}({})", Color::White.paint("Notes"), self.notes.len());
+            for (i, note) in self.notes.iter().enumerate() {
+                fmt_indent(format!("{} {} {} ",
+                             i,
+                             Color::Blue.paint(&note.name),
+                             Color::Yellow.paint(note.type_to_str())));
+                for b in &note.desc {
+                    print!("{:X}", b);
+                }
+                println!();
+            }
+        }
 
         //
         // Section headers
