@@ -3,13 +3,14 @@
 include!("constants_header.rs");
 include!("constants_relocation.rs");
 
-use scroll::{self, Pread};
+use scroll::{self, Pread, ctx};
 
 use failure::{
     Error,
 };
 
-use crate::format::{fmt_elf, fmt_elf_sym_table, fmt_elf_rel_table};
+use crate::Problem;
+use crate::format::{fmt_elf, fmt_elf_sym_table, fmt_elf_rel_table, fmt_elf_rela_table, fmt_elf_dynamic, align, fmt_indent};
 
 pub const ELF_MAGIC: &'static [u8; ELF_MAGIC_SIZE] = b"\x7FELF";
 pub const ELF_MAGIC_SIZE: usize = 4;
@@ -105,6 +106,7 @@ const PF_W: u32 = 1 << 1;
 // Segment is readable
 const PF_R: u32 = 1 << 2;
 
+#[inline]
 pub fn pt_to_str(pt: u32) -> &'static str {
     match pt {
         PT_NULL => "PT_NULL",
@@ -277,6 +279,7 @@ pub const SHF_FLAGS: [u32; SHF_NUM_REGULAR_FLAGS] = [
     SHF_ORDERED,
 ];
 
+#[inline]
 pub fn sht_to_str(sht: u32) -> &'static str {
     match sht {
         SHT_NULL => "SHT_NULL",
@@ -316,6 +319,7 @@ pub fn sht_to_str(sht: u32) -> &'static str {
     }
 }
 
+#[inline]
 pub fn shf_to_str(shf: u32) -> &'static str {
     match shf {
         SHF_WRITE => "SHF_WRITE",
@@ -684,6 +688,65 @@ impl From<Elf_rela_32> for Elf_rela {
 
 }
 
+#[derive(Debug)]
+#[repr(C)]
+struct Elf_note {
+    n_type: u32,
+    name:   String,
+    desc:   Vec<u8>,
+}
+
+pub const NT_GNU_ABI_TAG: u32 = 1;
+pub const ELF_NOTE_ABI: u32 = NT_GNU_ABI_TAG;
+pub const ELF_NOTE_OS_LINUX: u32 = 0;
+pub const ELF_NOTE_OS_GNU: u32 = 1;
+pub const ELF_NOTE_OS_SOLARIS2: u32 = 2;
+pub const ELF_NOTE_OS_FREEBSD: u32 = 3;
+pub const NT_GNU_HWCAP: u32 = 2;
+pub const NT_GNU_BUILD_ID: u32 = 3;
+pub const NT_GNU_GOLD_VERSION: u32 = 4;
+
+impl Elf_note {
+
+    pub fn type_to_str(&self) -> &'static str {
+        match self.n_type {
+            NT_GNU_ABI_TAG => "NT_GNU_ABI_TAG",
+            NT_GNU_HWCAP => "NT_GNU_HWCAP",
+            NT_GNU_BUILD_ID => "NT_GNU_BUILD_ID",
+            NT_GNU_GOLD_VERSION => "NT_GNU_GOLD_VERSION",
+            _ => "NT_UNKNOWN"
+        }
+    }
+
+}
+
+#[derive(Debug, Pread)]
+#[repr(C)]
+struct Elf_dynamic_32 {
+    d_tag: u32,
+    d_ptr: u32,
+}
+
+#[derive(Debug, Pread)]
+#[repr(C)]
+pub struct Elf_dynamic {
+    pub d_tag: u64,
+    pub d_ptr: u64,
+}
+
+impl From<Elf_dynamic_32> for Elf_dynamic {
+
+    fn from(header: Elf_dynamic_32) -> Self {
+
+        Elf_dynamic {
+            d_tag: header.d_tag as u64,
+            d_ptr: header.d_ptr as u64,
+        }
+
+    }
+
+}
+
 // const SIZE_OF_SECTION_HEADER_32: usize = 10 * 4;
 // const SIZE_OF_SECTION_HEADER_64: usize = 6 * 8 + 4 * 4;
 
@@ -692,17 +755,28 @@ pub struct Elf {
     program_headers: Vec<Elf_program_header>,
     section_headers: Vec<Elf_section_header>,
     sh_strtab:       Vec<u8>,
+
     symtab:          Vec<Elf_symbol_header>,
     symstr:          Vec<u8>,
+
     dynsym:          Vec<Elf_symbol_header>,
     dynstr:          Vec<u8>,
+
     reldyn:          Vec<Elf_rel>,
     relplt:          Vec<Elf_rel>,
+
+    reladyn:         Vec<Elf_rela>,
+    relaplt:         Vec<Elf_rela>,
+
+    dynamic:         Vec<Elf_dynamic>,
+
+    notes:           Vec<Elf_note>,
 }
 
-impl Elf {
+impl super::FileFormat for Elf {
+    type Item = Self;
 
-    pub fn parse(buf: &[u8]) -> Result<Self, Error> {
+    fn parse(buf: &[u8]) -> Result<Self, Error> {
 
         let e_ident = buf.pread_with::<E_ident>(0, scroll::BE)?;
         let bit_format = e_ident.ei_class;
@@ -710,7 +784,7 @@ impl Elf {
             ELFDATA2LSB => scroll::LE,
             ELFDATA2MSB => scroll::BE,
             _ => {
-                panic!("Invalid EI_DATA");
+                return Err(Error::from(Problem::Msg(format!("Invalid EI_DATA"))));
             },
         };
         let header;
@@ -723,6 +797,10 @@ impl Elf {
         let mut dynstr = Vec::new();
         let mut reldyn = Vec::new();
         let mut relplt = Vec::new();
+        let mut reladyn = Vec::new();
+        let mut relaplt = Vec::new();
+        let mut dynamic = Vec::new();
+        let mut notes  = Vec::new();
 
         match bit_format {
 
@@ -786,6 +864,47 @@ impl Elf {
                             }
                         }
                     }
+                    if head.sh_type == SHT_NOTE {
+                        let mut offset = head.sh_offset as usize;
+                        let namesz = buf.pread_with::<u32>(offset, endianness)?;
+                        let descsz = buf.pread_with::<u32>(offset + 4, endianness)?;
+                        let n_type = buf.pread_with::<u32>(offset + 8, endianness)?;
+                        let name = buf.pread_with::<&str>(offset + 12, ctx::StrCtx::Length(namesz as usize - 1))?.to_string();
+                        offset += 13;
+                        offset = align(8, offset);
+                        let desc = buf.pread_with::<&[u8]>(offset, descsz as usize)?.to_vec();
+                        notes.push( Elf_note {
+                            n_type,
+                            name,
+                            desc,
+                        });
+                    }
+                    if head.sh_type == SHT_RELA {
+                        if sh_strtab.pread::<&str>(head.sh_name as usize)? == ".rela.dyn" {
+                            let size = head.sh_size as usize / head.sh_entsize as usize;
+                            reladyn = Vec::with_capacity(size);
+                            for i in 0..size {
+                                reladyn.push(Elf_rela::from(buf.pread_with::<Elf_rela_32>(head.sh_offset as usize + i * head.sh_entsize as usize, endianness)
+                                                            .map_err(|e| Problem::Msg(format!("Could not read  RelaDyn entry: {}" ,e)))?));
+                            }
+                        }
+                        if sh_strtab.pread::<&str>(head.sh_name as usize)? == ".rela.plt" {
+                            let size = head.sh_size as usize / head.sh_entsize as usize;
+                            relaplt = Vec::with_capacity(size);
+                            for i in 0..size {
+                                relaplt.push(Elf_rela::from(buf.pread_with::<Elf_rela_32>(head.sh_offset as usize + i * head.sh_entsize as usize, endianness)
+                                                            .map_err(|e| Problem::Msg(format!("Could not read  RelaPlt entry: {}" ,e)))?));
+                            }
+                        }
+                    }
+                    if head.sh_type == SHT_DYNAMIC {
+                        let size = head.sh_size as usize / head.sh_entsize as usize;
+                        dynamic = Vec::with_capacity(size);
+                        for i in 0..size {
+                            dynamic.push(Elf_dynamic::from(buf.pread_with::<Elf_dynamic_32>(head.sh_offset as usize + i * head.sh_entsize as usize, endianness)
+                                                           .map_err(|e| Problem::Msg(format!("Could not read dynamic entry: {}" ,e)))?));
+                        }
+                    }
                 }
 
             },
@@ -847,11 +966,53 @@ impl Elf {
                             }
                         }
                     }
+                    if head.sh_type == SHT_NOTE {
+                        // Dunno why but it works that way. Is the 64bit version of this header not used?
+                        let mut offset = head.sh_offset as usize;
+                        let namesz = buf.pread_with::<u32>(offset, endianness)?;
+                        let descsz = buf.pread_with::<u32>(offset + 4, endianness)?;
+                        let n_type = buf.pread_with::<u32>(offset + 8, endianness)?;
+                        let name = buf.pread_with::<&str>(offset + 12, ctx::StrCtx::Length(namesz as usize - 1))?.to_string();
+                        offset += 13;
+                        offset = align(4, offset);
+                        let desc = buf.pread_with::<&[u8]>(offset, descsz as usize)?.to_vec();
+                        notes.push( Elf_note {
+                            n_type,
+                            name,
+                            desc,
+                        });
+                    }
+                    if head.sh_type == SHT_RELA {
+                        if sh_strtab.pread::<&str>(head.sh_name as usize)? == ".rela.dyn" {
+                            let size = head.sh_size as usize / head.sh_entsize as usize;
+                            reladyn = Vec::with_capacity(size);
+                            for i in 0..size {
+                                reladyn.push(buf.pread_with::<Elf_rela>(head.sh_offset as usize + i * head.sh_entsize as usize, endianness)
+                                             .map_err(|e| Problem::Msg(format!("Could not read RelaDyn entry: {}" ,e)))?);
+                            }
+                        }
+                        if sh_strtab.pread::<&str>(head.sh_name as usize)? == ".rela.plt" {
+                            let size = head.sh_size as usize / head.sh_entsize as usize;
+                            relaplt = Vec::with_capacity(size);
+                            for i in 0..size {
+                                relaplt.push(buf.pread_with::<Elf_rela>(head.sh_offset as usize + i * head.sh_entsize as usize, endianness)
+                                             .map_err(|e| Problem::Msg(format!("Could not read RelaPlt entry: {}" ,e)))?);
+                            }
+                        }
+                    }
+                    if head.sh_type == SHT_DYNAMIC {
+                        let size = head.sh_size as usize / head.sh_entsize as usize;
+                        dynamic = Vec::with_capacity(size);
+                        for i in 0..size {
+                            dynamic.push(buf.pread_with::<Elf_dynamic>(head.sh_offset as usize + i * head.sh_entsize as usize, endianness)
+                                         .map_err(|e| Problem::Msg(format!("Could not read dynamic entry: {}" ,e)))?);
+                        }
+                    }
                 }
 
             },
             _ => {
-                panic!("Invalid EI_CLASS");
+                return Err(Error::from(Problem::Msg(format!("Invalid EI_CLASS"))));
             },
 
         }
@@ -861,17 +1022,27 @@ impl Elf {
             program_headers,
             section_headers,
             sh_strtab,
+
             symtab,
             symstr,
+
             dynsym,
             dynstr,
+
             reldyn,
             relplt,
+
+            reladyn,
+            relaplt,
+
+            dynamic,
+
+            notes,
         })
 
     }
 
-    pub fn print(&self) -> Result<(), Error> {
+    fn print(&self) -> Result<(), Error> {
         use ansi_term::Color;
         use prettytable::{Table};
 
@@ -918,6 +1089,24 @@ impl Elf {
         println!();
 
         //
+        // Notes
+        //
+        if self.notes.len() > 0 {
+            println!("{}({})", Color::White.paint("Notes"), self.notes.len());
+            for (i, note) in self.notes.iter().enumerate() {
+                fmt_indent(format!("{} {} {} ",
+                             i,
+                             Color::Blue.paint(&note.name),
+                             Color::Yellow.paint(note.type_to_str())));
+                for b in &note.desc {
+                    print!("{:X}", b);
+                }
+                println!();
+            }
+            println!();
+        }
+
+        //
         // Section headers
         //
         println!("{}({})",
@@ -953,13 +1142,15 @@ impl Elf {
 
             table.add_row(row![
                 i,
-                self.sh_strtab.pread::<&str>(header.sh_name as usize)?,
+                self.sh_strtab.pread::<&str>(header.sh_name as usize)
+                    .map_err(|e| Problem::Msg(format!("Cannot read name: {}", e)))?,
                 sht_to_str(header.sh_type),
                 flags_cell,
                 Fr->format!("{:#X}", header.sh_addr),
                 Fy->format!("{:#X}", header.sh_offset),
                 Fg->format!("{:#X}", header.sh_size),
-                self.sh_strtab.pread::<&str>(self.section_headers[header.sh_link as usize].sh_name as usize)?,
+                self.sh_strtab.pread::<&str>(self.section_headers[header.sh_link as usize].sh_name as usize)
+                    .map_err(|e| Problem::Msg(format!("Cannot read name of link: {}", e)))?,
                 format!("{:#X}", header.sh_entsize),
                 format!("{:#X}", header.sh_addralign),
             ]);
@@ -974,7 +1165,8 @@ impl Elf {
                  Color::White.paint("SymbolTable"),
                  self.symtab.len());
         if self.symtab.len() > 0 {
-            fmt_elf_sym_table(&self.symtab, &self.symstr, &self.section_headers, &self.sh_strtab)?;
+            fmt_elf_sym_table(&self.symtab, &self.symstr, &self.section_headers, &self.sh_strtab)
+                .map_err(|e| Problem::Msg(format!("Could not print Symbol table: {}", e)))?;
         }
         println!();
 
@@ -985,7 +1177,9 @@ impl Elf {
                  Color::White.paint("DynSymTable"),
                  self.dynsym.len());
         if self.dynsym.len() > 0 {
-            fmt_elf_sym_table(&self.dynsym, &self.dynstr, &self.section_headers, &self.sh_strtab)?;
+            fmt_elf_sym_table(&self.dynsym, &self.dynstr, &self.section_headers, &self.sh_strtab)
+                .map_err(|e| Problem::Msg(format!("Could not print DynSym table: {}", e)))?;
+
         }
         println!();
 
@@ -996,7 +1190,9 @@ impl Elf {
                  Color::White.paint("RelDynTable"),
                  self.reldyn.len());
         if self.reldyn.len() > 0 {
-            fmt_elf_rel_table(&self.reldyn, &self.dynsym, &self.dynstr, self.header.e_machine)?;
+            fmt_elf_rel_table(&self.reldyn, &self.dynsym, &self.dynstr, self.header.e_machine)
+                .map_err(|e| Problem::Msg(format!("Could not print RelDyn table: {}", e)))?;
+
         }
         println!();
 
@@ -1007,9 +1203,46 @@ impl Elf {
                  Color::White.paint("RelPltTable"),
                  self.relplt.len());
         if self.relplt.len() > 0 {
-            fmt_elf_rel_table(&self.relplt, &self.dynsym, &self.dynstr, self.header.e_machine)?;
+            fmt_elf_rel_table(&self.relplt, &self.dynsym, &self.dynstr, self.header.e_machine)
+                .map_err(|e| Problem::Msg(format!("Could not print RelPlt table: {}", e)))?;
         }
         println!();
+
+        //
+        // RelaDyn table
+        //
+        println!("{}({})",
+                 Color::White.paint("RelaDynTable"),
+                 self.reladyn.len());
+        if self.reladyn.len() > 0 {
+            fmt_elf_rela_table(&self.reladyn, &self.dynsym, &self.dynstr, self.header.e_machine)
+                .map_err(|e| Problem::Msg(format!("Could not print RelaDyn table: {}", e)))?;
+        }
+        println!();
+
+        //
+        // RelaPlt table
+        //
+        println!("{}({})",
+                 Color::White.paint("RelaPltTable"),
+                 self.relaplt.len());
+        if self.relaplt.len() > 0 {
+            fmt_elf_rela_table(&self.relaplt, &self.dynsym, &self.dynstr, self.header.e_machine)
+                .map_err(|e| Problem::Msg(format!("Could not print RelaPlt table: {}", e)))?;
+        }
+        println!();
+
+        //
+        // Dynamic
+        //
+        if self.dynamic.len() > 0 {
+            println!("{}({})",
+                     Color::White.paint("Dynamic"),
+                     self.dynamic.len());
+            fmt_elf_dynamic(&self.dynamic, &self.dynstr)
+                .map_err(|e| Problem::Msg(format!("Could not print dynamic table: {}", e)))?;
+            println!();
+        }
 
         Ok(())
 

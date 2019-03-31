@@ -1,14 +1,19 @@
 <a href="http://spacemacs.org"><img src="https://cdn.rawgit.com/syl20bnr/spacemacs/442d025779da2f62fc86c2082703697714db6514/assets/spacemacs-badge.svg" alt="Made with Spacemacs"></a><br>
 # Bininfo 
+Get information about various binary file formats 
+
 Warning: Error handling is very basic and hasn't been tested.
+
+![png_example1](Media/Screenshot1.png)
+![definitely_not_stolen](Media/Screenshot2.png)
 
 ## Supported formats
 - [x] BMP
 - [x] PNG 1.2, PNGEXT 1.2
-- [ ] GIF
+- [x] GIF
 - [ ] JPG
 - [ ] PDF
-- [ ] ELF
+- [x] ELF
 - [ ] PE
 
 ## Resources
@@ -18,6 +23,10 @@ Warning: Error handling is very basic and hasn't been tested.
 
 ### Elf
 - https://github.com/m4b/goblin
+- http://www.skyfree.org/linux/references/ELF_Format.pdf
+
+### Gif
+- https://www.w3.org/Graphics/GIF/spec-gif89a.txt
 
 ### Png
 - http://www.libpng.org/pub/png/pngsuite.html

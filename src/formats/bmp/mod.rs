@@ -115,9 +115,10 @@ pub struct Bmp {
     icc_color:         Option<ICC_color_prof>,
 }
 
-impl Bmp {
+impl super::FileFormat for Bmp {
+    type Item = Self;
 
-    pub fn parse(buf: &[u8]) -> Result<Self, Error> {
+    fn parse(buf: &[u8]) -> Result<Self, Error> {
 
         let bmp_header = buf.pread_with(0, scroll::LE)
             .map_err(|e| Problem::Msg(format!("Could not read bmp header: {}", e)))?;
@@ -163,7 +164,7 @@ impl Bmp {
 
     }
 
-    pub fn print(&self) -> Result<(), Error> {
+    fn print(&self) -> Result<(), Error> {
         use ansi_term::Color;
 
         println!("BMP width: {}px height: {}px",

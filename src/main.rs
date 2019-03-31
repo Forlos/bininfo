@@ -7,6 +7,7 @@ extern crate scroll;
 extern crate scroll_derive;
 #[macro_use]
 extern crate failure;
+extern crate textwrap;
 
 mod magic;
 mod binary;
@@ -14,6 +15,7 @@ mod format;
 mod formats;
 
 use crate::binary::Binary;
+use crate::formats::FileFormat;
 
 use clap::{
     App,Arg,
@@ -75,12 +77,24 @@ fn run(file_path: &str) -> Result<(), Error> {
         },
         Binary::Elf(elf) => {
             elf.print()?;
+        },
+        Binary::Gif(gif) => {
+            gif.print()?;
+        },
+        Binary::Pdf(pdf) => {
+            pdf.print()?;
+        }
+        Binary::Jpg(jpg) => {
+            jpg.print()?;
+        }
+        Binary::Pe(pe) => {
+            pe.print()?;
         }
         Binary::Unknown  => {
             use ansi_term::Color;
 
-            println!("{}", Color::Black.on(Color::Red).paint("Unknown/unsupported file format"));
-            println!("Check for newest version: {}", "https://github.com/Forlos/bininfo");
+            eprintln!("{}", Color::Black.on(Color::Red).paint("Unknown/unsupported file format"));
+            eprintln!("Check for newest version: {}", "https://github.com/Forlos/bininfo");
         },
     }
 
