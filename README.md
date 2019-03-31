@@ -5,6 +5,7 @@ Get information about various binary file formats
 Warning: Error handling is very basic and hasn't been tested.
 
 ![png_example1](Media/Screenshot1.png)
+![definitely_not_stolen](Media/Screenshot2.png)
 
 ## Supported formats
 - [x] BMP
@@ -12,7 +13,7 @@ Warning: Error handling is very basic and hasn't been tested.
 - [x] GIF
 - [ ] JPG
 - [ ] PDF
-- [WIP] ELF
+- [x] ELF
 - [ ] PE
 
 ## Resources
