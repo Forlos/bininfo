@@ -213,7 +213,7 @@ pub fn fmt_elf_dynamic(dynamic: &Vec<Elf_dynamic>, dynstr: &Vec<u8>) -> Result<(
 
     for header in dynamic {
 
-        fmt_indent(format!("{:>16} ", Color::Cyan.paint(tag_to_str(header.d_tag))));
+        print!("  {:>16} ", tag_to_str(header.d_tag));
 
         match header.d_tag {
             DT_RPATH        => println!("{}", Color::Red.paint(dynstr.pread::<&str>(header.d_ptr as usize)?)),
@@ -255,7 +255,7 @@ pub fn align(alignment: usize, mut offset: usize) -> usize {
 // Marks end of dynamic section
 const DT_NULL: u64 = 0;
 // Name of needed library
-const DT_NEEDED: u64 = 1;
+pub const DT_NEEDED: u64 = 1;
 // Size in bytes of PLT relocs
 const DT_PLTRELSZ: u64 = 2;
 // Processor defined value

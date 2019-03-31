@@ -1244,6 +1244,18 @@ impl super::FileFormat for Elf {
             println!();
         }
 
+        //
+        // Libraries
+        //
+        if self.dynamic.len() > 0 {
+            println!("{}", Color::White.paint("Libraries"));
+            for entry in self.dynamic.iter() {
+                if entry.d_tag == crate::format::DT_NEEDED {
+                    println!("{:>4}{}", "", Color::Blue.paint(self.dynstr.pread::<&str>(entry.d_ptr as usize)?));
+                }
+            }
+        }
+
         Ok(())
 
     }
