@@ -12,7 +12,7 @@ pub const PNG_HEADER_SIZE: usize = 8;
 const TRIM_INDEX: usize = 20;
 // const IHDR_SIZE: usize = PNG_HEADER_SIZE + 25;
 
-#[derive(Debug, Pread)]
+#[derive(Debug, Pread, PartialEq, Eq)]
 #[repr(C)]
 pub struct Prefix {
     pub size: u32,
@@ -31,7 +31,7 @@ impl Prefix {
 
 }
 
-#[derive(Debug, Pread)]
+#[derive(Debug, Pread, PartialEq, Eq)]
 #[repr(C)]
 pub struct Postfix {
     pub checksum: u32,
@@ -65,7 +65,7 @@ struct RGB_16 {
     blue:    u16,
 }
 
-#[derive(Debug, Pread)]
+#[derive(Debug, Pread, PartialEq, Eq)]
 #[repr(C)]
 struct Ihdr {
     prefix:      Prefix,
@@ -133,7 +133,7 @@ struct Idat {
     postfix: Postfix,
 }
 
-#[derive(Debug, Pread)]
+#[derive(Debug, Pread, PartialEq, Eq)]
 #[repr(C)]
 struct Iend {
     prefix:  Prefix,
@@ -1632,6 +1632,72 @@ impl super::FileFormat for Png {
         if let Some(iend) = &self.iend {
             fmt_png_header("IEND", &iend.prefix, &iend.postfix);
         }
+
+        Ok(())
+
+    }
+
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_ihrp_parsing() -> Result<(), Error> {
+        let buf = vec![
+            0x00,0x00,0x00,0x0D,
+            0x49,0x48,0x44,0x52,
+            0x00,0x00,0x07,0x80,
+            0x00,0x00,0x04,0x38,
+            0x08,
+            0x02,
+            0x00,
+            0x00,
+            0x00,
+            0x67,0xB1,0x56,0x14,
+            ];
+
+        let ihdr = Ihdr {
+            prefix: Prefix {
+                size: 13,
+                id:   1229472850,
+            },
+            width:       1920,
+            height:      1080,
+            bpp:         8,
+            color:       2,
+            compression: 0,
+            filter:      0,
+            interlace:   0,
+            postfix:     Postfix {
+                checksum: 0x67B15614,
+            }
+
+        };
+
+
+        assert_eq!(ihdr, buf.pread_with::<Ihdr>(0, scroll::BE)?);
+
+        Ok(())
+
+    }
+
+    #[test]
+    fn test_iend_parsing() -> Result<(), Error> {
+        let buf = vec![0x00,0x00,0x00,0x00,0x49,0x45,0x4E,0x44,0xAE,0x42,0x60,0x82];
+
+        let iend = Iend {
+            prefix: Prefix {
+                size: 0,
+                id: 1229278788,
+            },
+            postfix: Postfix {
+                checksum: 0xAE426082
+            }
+        };
+
+        assert_eq!(iend, buf.pread_with::<Iend>(0, scroll::BE)?);
 
         Ok(())
 
