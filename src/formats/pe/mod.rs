@@ -41,92 +41,120 @@ struct Std_COFF_header {
 
 #[derive(Pread, Debug)]
 struct Windows_fields_32 {
-    image_base: u32,
-    section_align: u32,
-    file_align: u32,
-    major_os_ver: u16,
-    minor_os_ver: u16,
-    major_img_ver: u16,
-    minor_img_ver: u16,
-    major_sub_ver: u16,
-    minor_sub_ver: u16,
-    win32_ver: u32,
-    sz_of_img: u32,
-    sz_of_headers: u32,
-    checksum: u32,
-    subsys: u16,
-    dll_chara: u16,
+    image_base:       u32,
+    section_align:    u32,
+    file_align:       u32,
+    major_os_ver:     u16,
+    minor_os_ver:     u16,
+    major_img_ver:    u16,
+    minor_img_ver:    u16,
+    major_sub_ver:    u16,
+    minor_sub_ver:    u16,
+    win32_ver:        u32,
+    sz_of_img:        u32,
+    sz_of_headers:    u32,
+    checksum:         u32,
+    subsys:           u16,
+    dll_chara:        u16,
     sz_stack_reserve: u32,
-    sz_stack_commit: u32,
-    sz_heap_reserve: u32,
-    sz_heap_commit: u32,
-    loader_flags: u32,
-    n_of_rva: u32,
+    sz_stack_commit:  u32,
+    sz_heap_reserve:  u32,
+    sz_heap_commit:   u32,
+    loader_flags:     u32,
+    n_of_rva:         u32,
 }
 
 #[derive(Pread, Debug)]
 struct Windows_fields {
-    image_base: u64,
-    section_align: u32,
-    file_align: u32,
-    major_os_ver: u16,
-    minor_os_ver: u16,
-    major_img_ver: u16,
-    minor_img_ver: u16,
-    major_sub_ver: u16,
-    minor_sub_ver: u16,
-    win32_ver: u32,
-    sz_of_img: u32,
-    sz_of_headers: u32,
-    checksum: u32,
-    subsys: u16,
-    dll_chara: u16,
+    image_base:       u64,
+    section_align:    u32,
+    file_align:       u32,
+    major_os_ver:     u16,
+    minor_os_ver:     u16,
+    major_img_ver:    u16,
+    minor_img_ver:    u16,
+    major_sub_ver:    u16,
+    minor_sub_ver:    u16,
+    win32_ver:        u32,
+    sz_of_img:        u32,
+    sz_of_headers:    u32,
+    checksum:         u32,
+    subsys:           u16,
+    dll_chara:        u16,
     sz_stack_reserve: u64,
-    sz_stack_commit: u64,
-    sz_heap_reserve: u64,
-    sz_heap_commit: u64,
-    loader_flags: u32,
-    n_of_rva: u32,
+    sz_stack_commit:  u64,
+    sz_heap_reserve:  u64,
+    sz_heap_commit:   u64,
+    loader_flags:     u32,
+    n_of_rva:         u32,
 }
 
 impl From<Windows_fields_32> for Windows_fields {
 
     fn from(header: Windows_fields_32) -> Windows_fields {
         Windows_fields {
-            image_base: header.image_base as u64,
-            section_align: header.section_align,
-            file_align: header.file_align,
-            major_os_ver: header.major_os_ver,
-            minor_os_ver: header.minor_os_ver,
-            major_img_ver: header.major_img_ver,
-            minor_img_ver: header.minor_img_ver,
-            major_sub_ver: header.major_sub_ver,
-            minor_sub_ver: header.minor_sub_ver,
-            win32_ver: header.win32_ver,
-            sz_of_img: header.sz_of_img,
-            sz_of_headers: header.sz_of_headers,
-            checksum: header.checksum,
-            subsys: header.subsys,
-            dll_chara: header.dll_chara,
+            image_base:       header.image_base as u64,
+            section_align:    header.section_align,
+            file_align:       header.file_align,
+            major_os_ver:     header.major_os_ver,
+            minor_os_ver:     header.minor_os_ver,
+            major_img_ver:    header.major_img_ver,
+            minor_img_ver:    header.minor_img_ver,
+            major_sub_ver:    header.major_sub_ver,
+            minor_sub_ver:    header.minor_sub_ver,
+            win32_ver:        header.win32_ver,
+            sz_of_img:        header.sz_of_img,
+            sz_of_headers:    header.sz_of_headers,
+            checksum:         header.checksum,
+            subsys:           header.subsys,
+            dll_chara:        header.dll_chara,
             sz_stack_reserve: header.sz_stack_reserve as u64,
-            sz_stack_commit: header.sz_stack_commit as u64,
-            sz_heap_reserve: header.sz_heap_reserve as u64,
-            sz_heap_commit: header.sz_heap_commit as u64,
-            loader_flags: header.loader_flags,
-            n_of_rva: header.n_of_rva,
+            sz_stack_commit:  header.sz_stack_commit as u64,
+            sz_heap_reserve:  header.sz_heap_reserve as u64,
+            sz_heap_commit:   header.sz_heap_commit as u64,
+            loader_flags:     header.loader_flags,
+            n_of_rva:         header.n_of_rva,
         }
     }
 
 }
 
+#[derive(Pread, Debug)]
+struct Image_data_dir {
+    rva: u32,
+    sz:  u32,
+}
+
+#[derive(Pread, Debug)]
+struct Data_dirs {
+    export_tab:   Image_data_dir,
+    import_tab:   Image_data_dir,
+    resource_tab: Image_data_dir,
+    except_tab:   Image_data_dir,
+    cert_tab:     Image_data_dir,
+    basrel_tab:   Image_data_dir,
+    debug_tab:    Image_data_dir,
+    arch_tab:     Image_data_dir,
+    gloptr_tab:   Image_data_dir,
+    tls_tab:      Image_data_dir,
+    loadcfg_tab:  Image_data_dir,
+    bound_imp:    Image_data_dir,
+    iat:          Image_data_dir,
+    // Delay Import Descriptor
+    did:          Image_data_dir,
+    clr_runtime:  Image_data_dir,
+    reserved:     Image_data_dir,
+}
+
 
 #[derive(Debug)]
 pub struct Pe {
-    opt: Opt,
+    opt:        Opt,
 
-    coff: COFF_header,
-    std_coff: Std_COFF_header,
+    coff:       COFF_header,
+    std_coff:   Std_COFF_header,
     win_fields: Windows_fields,
+    data_dirs:  Data_dirs,
 }
 
 impl super::FileFormat for Pe {
@@ -143,14 +171,18 @@ impl super::FileFormat for Pe {
         let coff = buf.pread_with(pe_sig + 4, scroll::LE)?;
         let mut std_coff = buf.pread_with::<Std_COFF_header>(pe_sig + 24, scroll::LE)?;
         let win_fields;
+        let data_dirs;
 
         if std_coff.magic == PE32PLUS_MAGIC {
             std_coff.base_of_data = 0;
             win_fields = buf.pread_with(pe_sig + 48, scroll::LE)?;
+            data_dirs = buf.pread_with(pe_sig + 136, scroll::LE)?;
         }
         else {
             win_fields = Windows_fields::from(buf.pread_with::<Windows_fields_32>(pe_sig + 52, scroll::LE)?);
+            data_dirs = buf.pread_with(pe_sig + 120, scroll::LE)?;
         }
+
 
         Ok(Pe {
             opt,
@@ -158,6 +190,7 @@ impl super::FileFormat for Pe {
             coff,
             std_coff,
             win_fields,
+            data_dirs,
         })
 
     }
