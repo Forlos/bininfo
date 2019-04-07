@@ -138,6 +138,8 @@ struct Img_desc {
 }
 
 pub struct Gif {
+    opt:      Opt,
+
     header:   Gif_header,
     lsd:      LSD,
     gct:      Option<GCT>,
@@ -296,6 +298,8 @@ impl super::FileFormat for Gif {
         }
 
         Ok(Gif {
+            opt,
+
             header,
             lsd,
             gct,

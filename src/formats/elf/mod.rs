@@ -752,6 +752,8 @@ impl From<Elf_dynamic_32> for Elf_dynamic {
 // const SIZE_OF_SECTION_HEADER_64: usize = 6 * 8 + 4 * 4;
 
 pub struct Elf {
+    opt:             Opt,
+
     header:          Elf_header,
     program_headers: Vec<Elf_program_header>,
     section_headers: Vec<Elf_section_header>,
@@ -1019,6 +1021,8 @@ impl super::FileFormat for Elf {
         }
 
         Ok(Elf {
+            opt,
+
             header,
             program_headers,
             section_headers,

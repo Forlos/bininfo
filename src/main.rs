@@ -35,8 +35,9 @@ pub struct Opt {
     #[structopt(short = "t", long = "trim", default_value = "20", help = "number of lines befor trim")]
     trim_lines: usize,
 
+    /// File to print info about
     #[structopt(help = "file path")]
-    input: String
+    file: String
 
 }
 
@@ -59,7 +60,7 @@ fn main() {
 
 fn run(opt: Opt) -> Result<(), Error> {
 
-    let file_path = &opt.input;
+    let file_path = &opt.file;
 
     let mut fd = File::open(file_path)
         .map_err(|e| Problem::Msg(format!("Cannot open file {:?}: {}", file_path, e)))?;

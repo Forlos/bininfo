@@ -9,8 +9,6 @@ use crate::format::{fmt_indent, fmt_indentln, fmt_png_header};
 pub const PNG_HEADER: &'static [u8; PNG_HEADER_SIZE] = b"\x89PNG\x0D\x0A\x1A\x0A";
 pub const PNG_HEADER_SIZE: usize = 8;
 
-// const IHDR_SIZE: usize = PNG_HEADER_SIZE + 25;
-
 #[derive(Debug, Pread, PartialEq, Eq)]
 #[repr(C)]
 pub struct Prefix {

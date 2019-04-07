@@ -13,7 +13,7 @@ pub const JPG_MAGIC_EXIF_2: &'static [u8; EXIF_SIZE] = b"\x45\x78\x69\x66\x00\x0
 pub const EXIF_SIZE: usize = 6;
 
 pub struct Jpg {
-
+    opt: Opt,
 }
 
 impl super::FileFormat for Jpg {
@@ -22,7 +22,7 @@ impl super::FileFormat for Jpg {
     fn parse(opt: Opt, buf: &[u8]) -> Result<Self, Error> {
 
         Ok(Jpg {
-
+            opt,
         })
 
     }

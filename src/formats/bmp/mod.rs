@@ -108,6 +108,8 @@ enum Compression_method {
 
 #[repr(C)]
 pub struct Bmp {
+    opt:               Opt,
+
     bmp_header:        Bmp_header,
     dib_header:        Bitmap_info_header,
     rgb_bitmask:       Option<RGB_bitmask>,
@@ -155,6 +157,8 @@ impl super::FileFormat for Bmp {
         }
 
         Ok(Bmp {
+            opt,
+
             bmp_header,
             dib_header,
             rgb_bitmask,
