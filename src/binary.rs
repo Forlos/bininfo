@@ -1,3 +1,4 @@
+use crate::Opt;
 use crate::magic::{self, Format};
 use crate::formats::*;
 
@@ -19,18 +20,18 @@ pub enum Binary {
 
 impl Binary {
 
-    pub fn parse(buf: &[u8]) -> Result<Self, Error> {
+    pub fn parse(opt: Opt, buf: &[u8]) -> Result<Self, Error> {
 
         use std::io::Cursor;
 
         match magic::parse(&mut Cursor::new(&buf))? {
-            Format::Png => Ok(Binary::Png(png::Png::parse(buf)?)),
-            Format::Bmp => Ok(Binary::Bmp(bmp::Bmp::parse(buf)?)),
-            Format::Elf => Ok(Binary::Elf(elf::Elf::parse(buf)?)),
-            Format::Gif => Ok(Binary::Gif(gif::Gif::parse(buf)?)),
-            Format::Pdf => Ok(Binary::Pdf(pdf::Pdf::parse(buf)?)),
-            Format::Jpg => Ok(Binary::Jpg(jpg::Jpg::parse(buf)?)),
-            Format::Pe => Ok(Binary::Pe(pe::Pe::parse(buf)?)),
+            Format::Png => Ok(Binary::Png(png::Png::parse(opt, buf)?)),
+            Format::Bmp => Ok(Binary::Bmp(bmp::Bmp::parse(opt, buf)?)),
+            Format::Elf => Ok(Binary::Elf(elf::Elf::parse(opt, buf)?)),
+            Format::Gif => Ok(Binary::Gif(gif::Gif::parse(opt, buf)?)),
+            Format::Pdf => Ok(Binary::Pdf(pdf::Pdf::parse(opt, buf)?)),
+            Format::Jpg => Ok(Binary::Jpg(jpg::Jpg::parse(opt, buf)?)),
+            Format::Pe => Ok(Binary::Pe(pe::Pe::parse(opt, buf)?)),
             Format::Unknown => Ok(Binary::Unknown),
         }
 

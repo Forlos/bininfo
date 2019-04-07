@@ -1,3 +1,4 @@
+use crate::Opt;
 use failure::{Error};
 
 pub const JPG_MAGIC: &'static [u8; JPG_MAGIC_SIZE] = b"\xFF\xD8\xFF\xDB";
@@ -18,7 +19,7 @@ pub struct Jpg {
 impl super::FileFormat for Jpg {
     type Item = Self;
 
-    fn parse(buf: &[u8]) -> Result<Self, Error> {
+    fn parse(opt: Opt, buf: &[u8]) -> Result<Self, Error> {
 
         Ok(Jpg {
 

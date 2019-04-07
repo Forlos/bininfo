@@ -7,9 +7,9 @@ publish = false
 
 [dependencies]
 ansi_term      = "0.11"
-clap           = "2.32.0"
 failure        = "0.1"
 prettytable-rs = "0.8"
 scroll         = "0.9"
 scroll_derive  = "0.9"
+structopt      = "0.2"
 textwrap       = { version = "0.11", features = ["term_size"] }

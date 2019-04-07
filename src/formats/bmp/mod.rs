@@ -1,5 +1,6 @@
 #![allow(non_camel_case_types, dead_code)]
 use crate::Problem;
+use crate::Opt;
 
 use failure::{Error};
 use scroll::{self, Pread};
@@ -118,7 +119,7 @@ pub struct Bmp {
 impl super::FileFormat for Bmp {
     type Item = Self;
 
-    fn parse(buf: &[u8]) -> Result<Self, Error> {
+    fn parse(opt: Opt, buf: &[u8]) -> Result<Self, Error> {
 
         let bmp_header = buf.pread_with(0, scroll::LE)
             .map_err(|e| Problem::Msg(format!("Could not read bmp header: {}", e)))?;

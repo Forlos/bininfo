@@ -9,6 +9,7 @@ use failure::{
     Error,
 };
 
+use crate::Opt;
 use crate::Problem;
 use crate::format::{fmt_elf, fmt_elf_sym_table, fmt_elf_rel_table, fmt_elf_rela_table, fmt_elf_dynamic, align, fmt_indent};
 
@@ -776,7 +777,7 @@ pub struct Elf {
 impl super::FileFormat for Elf {
     type Item = Self;
 
-    fn parse(buf: &[u8]) -> Result<Self, Error> {
+    fn parse(opt: Opt, buf: &[u8]) -> Result<Self, Error> {
 
         let e_ident = buf.pread_with::<E_ident>(0, scroll::BE)?;
         let bit_format = e_ident.ei_class;
