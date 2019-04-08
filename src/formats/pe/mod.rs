@@ -301,8 +301,8 @@ impl super::FileFormat for Pe {
         fmt_indentln(format!("Timedate stamp: {:#X}", self.coff.timedate_stamp));
         fmt_indentln(format!("Pointer to symbol table: {:#X}", self.coff.pointer_to_symtab));
         fmt_indentln(format!("Number of symbols: {}", self.coff.n_of_symtab));
-        fmt_indentln(format!("Size of optional header {}", self.coff.sz_of_opt_header));
-        fmt_indentln(format!("Characteristics: {:#X}", self.coff.characteristics));
+        fmt_indentln(format!("Size of optional header: {}", self.coff.sz_of_opt_header));
+        fmt_indentln(format!("Characteristics: {}", characteristics_to_str(self.coff.characteristics)));
         println!();
 
         if self.sections.len() > 0 {

@@ -70,29 +70,58 @@ pub const CODEVIEW_PDB20_MAGIC: u32 = 0x3031424e;
 pub const CODEVIEW_CV50_MAGIC: u32 = 0x3131424e;
 pub const CODEVIEW_CV41_MAGIC: u32 = 0x3930424e;
 
-pub const IMAGE_FILE_RELOCS_STRIPPED: u16 = 0x0001;
-pub const IMAGE_FILE_EXECUTABLE_IMAGE: u16 = 0x0002;
-pub const IMAGE_FILE_LINE_NUMS_STRIPPED: u16 = 0x0004;
-pub const IMAGE_FILE_LOCAL_SYMS_STRIPPED: u16 = 0x0008;
-pub const IMAGE_FILE_AGGRESSIVE_WS_TRIM: u16 = 0x0010;
-pub const IMAGE_FILE_LARGE_ADDRESS_AWARE: u16 = 0x0020;
-pub const RESERVED: u16 = 0x0040;
-pub const IMAGE_FILE_BYTES_REVERSED_LO: u16 = 0x0080;
-pub const IMAGE_FILE_32BIT_MACHINE: u16 = 0x0100;
-pub const IMAGE_FILE_DEBUG_STRIPPED: u16 = 0x0200;
+// Characteristics
+
+// The Characteristics field contains flags that indicate attributes of the object or image file. The following flags are currently defined:
+
+pub const IMAGE_FILE_RELOCS_STRIPPED:         u16 = 0x0001;
+pub const IMAGE_FILE_EXECUTABLE_IMAGE:        u16 = 0x0002;
+pub const IMAGE_FILE_LINE_NUMS_STRIPPED:      u16 = 0x0004;
+pub const IMAGE_FILE_LOCAL_SYMS_STRIPPED:     u16 = 0x0008;
+pub const IMAGE_FILE_AGGRESSIVE_WS_TRIM:      u16 = 0x0010;
+pub const IMAGE_FILE_LARGE_ADDRESS_AWARE:     u16 = 0x0020;
+pub const RESERVED:                           u16 = 0x0040;
+pub const IMAGE_FILE_BYTES_REVERSED_LO:       u16 = 0x0080;
+pub const IMAGE_FILE_32BIT_MACHINE:           u16 = 0x0100;
+pub const IMAGE_FILE_DEBUG_STRIPPED:          u16 = 0x0200;
 pub const IMAGE_FILE_REMOVABLE_RUN_FROM_SWAP: u16 = 0x0400;
-pub const IMAGE_FILE_NET_RUN_FROM_SWAP: u16 = 0x0800;
-pub const IMAGE_FILE_SYSTEM: u16 = 0x1000;
-pub const IMAGE_FILE_DLL: u16 = 0x2000;
-pub const IMAGE_FILE_UP_SYSTEM_ONLY: u16 = 0x4000;
-pub const IMAGE_FILE_BYTES_REVERSED_HI: u16 = 0x8000;
+pub const IMAGE_FILE_NET_RUN_FROM_SWAP:       u16 = 0x0800;
+pub const IMAGE_FILE_SYSTEM:                  u16 = 0x1000;
+pub const IMAGE_FILE_DLL:                     u16 = 0x2000;
+pub const IMAGE_FILE_UP_SYSTEM_ONLY:          u16 = 0x4000;
+pub const IMAGE_FILE_BYTES_REVERSED_HI:       u16 = 0x8000;
 
 pub fn is_dll(characteristics: u16) -> bool {
-  characteristics & IMAGE_FILE_DLL == IMAGE_FILE_DLL
+    characteristics & IMAGE_FILE_DLL == IMAGE_FILE_DLL
 }
 
 pub fn is_exe(characteristics: u16) -> bool {
-  characteristics & IMAGE_FILE_EXECUTABLE_IMAGE == IMAGE_FILE_EXECUTABLE_IMAGE
+    characteristics & IMAGE_FILE_EXECUTABLE_IMAGE == IMAGE_FILE_EXECUTABLE_IMAGE
+}
+
+pub fn characteristics_to_str(characteristics: u16) -> String {
+
+    let mut chara = String::new();
+
+    if characteristics & IMAGE_FILE_RELOCS_STRIPPED         == 0x0001 { chara += "RELOC_STRIPPED "; }
+    if characteristics & IMAGE_FILE_EXECUTABLE_IMAGE        == 0x0002 { chara += "EXECUTABLE "; }
+    if characteristics & IMAGE_FILE_LINE_NUMS_STRIPPED      == 0x0004 { chara += "NUMS_STRIPPED "; }
+    if characteristics & IMAGE_FILE_LOCAL_SYMS_STRIPPED     == 0x0008 { chara += "SYMS_STRIPPED "; }
+    if characteristics & IMAGE_FILE_AGGRESSIVE_WS_TRIM      == 0x0010 { chara += "WS_TRIM "; }
+    if characteristics & IMAGE_FILE_LARGE_ADDRESS_AWARE     == 0x0020 { chara += "LARGE_ADDR "; }
+    if characteristics & RESERVED                           == 0x0040 { chara += "RESERVED "; }
+    if characteristics & IMAGE_FILE_BYTES_REVERSED_LO       == 0x0080 { chara += "LITTLE_ENDIAN "; }
+    if characteristics & IMAGE_FILE_32BIT_MACHINE           == 0x0100 { chara += "32BIT_MACHINE "; }
+    if characteristics & IMAGE_FILE_DEBUG_STRIPPED          == 0x0200 { chara += "DEBUG_STRIPPED "; }
+    if characteristics & IMAGE_FILE_REMOVABLE_RUN_FROM_SWAP == 0x0400 { chara += "REMOVABLE_SWAP "; }
+    if characteristics & IMAGE_FILE_NET_RUN_FROM_SWAP       == 0x0800 { chara += "NET_SWAP "; }
+    if characteristics & IMAGE_FILE_SYSTEM                  == 0x1000 { chara += "FILE_SYSTEM "; }
+    if characteristics & IMAGE_FILE_DLL                     == 0x2000 { chara += "DLL "; }
+    if characteristics & IMAGE_FILE_UP_SYSTEM_ONLY          == 0x4000 { chara += "UP_SYSTEM_ONLY "; }
+    if characteristics & IMAGE_FILE_BYTES_REVERSED_HI       == 0x8000 { chara += "BIG_ENDIAN "; }
+
+    chara
+
 }
 
 // Machine Types
@@ -129,31 +158,31 @@ pub const IMAGE_FILE_MACHINE_WCEMIPSV2: u16 = 0x169; // MIPS little-endian WCE v
 pub fn machine_to_str(machine: u16) -> &'static str {
 
     match machine {
-        IMAGE_FILE_MACHINE_UNKNOWN   => "ANY_MACHINE ",
-        IMAGE_FILE_MACHINE_AM33      => "Matsushita AM33 ",
-        IMAGE_FILE_MACHINE_AMD64     => "x64 ",
-        IMAGE_FILE_MACHINE_ARM       => "ARM little endian ",
-        IMAGE_FILE_MACHINE_ARM64     => "ARM64 little endian ",
-        IMAGE_FILE_MACHINE_ARMNT     => "ARM Thumb-2 little endian ",
-        IMAGE_FILE_MACHINE_EBC       => "EFI byte code ",
-        IMAGE_FILE_MACHINE_I386      => "Intel 386 ",
-        IMAGE_FILE_MACHINE_IA64      => "Intel Itanium processor family ",
-        IMAGE_FILE_MACHINE_M32R      => "Mitsubishi M32R little endian ",
-        IMAGE_FILE_MACHINE_MIPS16    => "MIPS16 ",
-        IMAGE_FILE_MACHINE_MIPSFPU   => "MIPS with FPU ",
-        IMAGE_FILE_MACHINE_MIPSFPU16 => "MIPS16 with FPU ",
-        IMAGE_FILE_MACHINE_POWERPC   => "Power PC little endian ",
-        IMAGE_FILE_MACHINE_POWERPCFP => "Power PC with floating point support ",
-        IMAGE_FILE_MACHINE_R4000     => "MIPS little endian ",
-        IMAGE_FILE_MACHINE_RISCV32   => "RISC-V 32-bit address space ",
-        IMAGE_FILE_MACHINE_RISCV64   => "RISC-V 64-bit address space ",
-        IMAGE_FILE_MACHINE_RISCV128  => "RISC-V 128-bit address space ",
-        IMAGE_FILE_MACHINE_SH3       => "Hitachi SH3 ",
-        IMAGE_FILE_MACHINE_SH3DSP    => "Hitachi SH3 DSP ",
-        IMAGE_FILE_MACHINE_SH4       => "Hitachi SH3 DSP ",
-        IMAGE_FILE_MACHINE_SH5       => "Hitachi SH5 ",
-        IMAGE_FILE_MACHINE_THUMB     => "Thumb ",
-        IMAGE_FILE_MACHINE_WCEMIPSV2 => "MIPS little-endian WCE v2 ",
-        _ => "UNKNOWN_MACHINE ",
+        IMAGE_FILE_MACHINE_UNKNOWN   => "ANY_MACHINE",
+        IMAGE_FILE_MACHINE_AM33      => "Matsushita AM33",
+        IMAGE_FILE_MACHINE_AMD64     => "x64",
+        IMAGE_FILE_MACHINE_ARM       => "ARM little endian",
+        IMAGE_FILE_MACHINE_ARM64     => "ARM64 little endian",
+        IMAGE_FILE_MACHINE_ARMNT     => "ARM Thumb-2 little endian",
+        IMAGE_FILE_MACHINE_EBC       => "EFI byte code",
+        IMAGE_FILE_MACHINE_I386      => "Intel 386",
+        IMAGE_FILE_MACHINE_IA64      => "Intel Itanium processor family",
+        IMAGE_FILE_MACHINE_M32R      => "Mitsubishi M32R little endian",
+        IMAGE_FILE_MACHINE_MIPS16    => "MIPS16",
+        IMAGE_FILE_MACHINE_MIPSFPU   => "MIPS with FPU",
+        IMAGE_FILE_MACHINE_MIPSFPU16 => "MIPS16 with FPU",
+        IMAGE_FILE_MACHINE_POWERPC   => "Power PC little endian",
+        IMAGE_FILE_MACHINE_POWERPCFP => "Power PC with floating point support",
+        IMAGE_FILE_MACHINE_R4000     => "MIPS little endian",
+        IMAGE_FILE_MACHINE_RISCV32   => "RISC-V 32-bit address space",
+        IMAGE_FILE_MACHINE_RISCV64   => "RISC-V 64-bit address space",
+        IMAGE_FILE_MACHINE_RISCV128  => "RISC-V 128-bit address space",
+        IMAGE_FILE_MACHINE_SH3       => "Hitachi SH3",
+        IMAGE_FILE_MACHINE_SH3DSP    => "Hitachi SH3 DSP",
+        IMAGE_FILE_MACHINE_SH4       => "Hitachi SH3 DSP",
+        IMAGE_FILE_MACHINE_SH5       => "Hitachi SH5",
+        IMAGE_FILE_MACHINE_THUMB     => "Thumb",
+        IMAGE_FILE_MACHINE_WCEMIPSV2 => "MIPS little-endian WCE v2",
+        _ => "UNKNOWN_MACHINE",
     }
 }

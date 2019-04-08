@@ -457,6 +457,6 @@ pub fn fmt_pe(header: &COFF_header) {
 
 
 
-    println!();
+    println!(":\n");
 
 }
