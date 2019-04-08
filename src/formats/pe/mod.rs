@@ -146,6 +146,20 @@ struct Data_dirs {
     reserved:     Image_data_dir,
 }
 
+#[derive(Pread, Debug)]
+struct Section_table {
+    name: [u8; 8],
+    virt_sz: u32,
+    virt_addr: u32,
+    sz_raw_data: u32,
+    ptr_raw_data: u32,
+    ptr_relocs: u32,
+    ptr_linenum: u32,
+    n_relocs: u32,
+    n_linenum: u32,
+    characteristics: u32,
+}
+
 
 #[derive(Debug)]
 pub struct Pe {
@@ -155,6 +169,8 @@ pub struct Pe {
     std_coff:   Std_COFF_header,
     win_fields: Windows_fields,
     data_dirs:  Data_dirs,
+
+    sections:   Vec<Section_table>,
 }
 
 impl super::FileFormat for Pe {
@@ -168,20 +184,30 @@ impl super::FileFormat for Pe {
             return Err(Error::from(Problem::Msg(format!("Invalid PE signature"))));
         }
 
-        let coff = buf.pread_with(pe_sig + 4, scroll::LE)?;
+        let coff = buf.pread_with::<COFF_header>(pe_sig + 4, scroll::LE)?;
         let mut std_coff = buf.pread_with::<Std_COFF_header>(pe_sig + 24, scroll::LE)?;
         let win_fields;
         let data_dirs;
+        let mut sections = Vec::with_capacity(coff.n_of_sections as usize);
 
         if std_coff.magic == PE32PLUS_MAGIC {
             std_coff.base_of_data = 0;
-            win_fields = buf.pread_with(pe_sig + 48, scroll::LE)?;
-            data_dirs = buf.pread_with(pe_sig + 136, scroll::LE)?;
+            win_fields = buf.pread_with(pe_sig + 24 + 24, scroll::LE)?;
+            data_dirs = buf.pread_with(pe_sig + 24 + 112, scroll::LE)?;
+
+            for _ in 0..coff.n_of_sections {
+                sections.push(buf.pread_with(pe_sig + 24 + 240, scroll::LE)?);
+            }
         }
         else {
-            win_fields = Windows_fields::from(buf.pread_with::<Windows_fields_32>(pe_sig + 52, scroll::LE)?);
-            data_dirs = buf.pread_with(pe_sig + 120, scroll::LE)?;
+            win_fields = Windows_fields::from(buf.pread_with::<Windows_fields_32>(pe_sig + 24 + 28, scroll::LE)?);
+            data_dirs = buf.pread_with(pe_sig + 24 + 96, scroll::LE)?;
+
+            for _ in 0..coff.n_of_sections {
+                sections.push(buf.pread_with(pe_sig + 24 + 224, scroll::LE)?);
+            }
         }
+
 
 
         Ok(Pe {
@@ -191,6 +217,8 @@ impl super::FileFormat for Pe {
             std_coff,
             win_fields,
             data_dirs,
+
+            sections,
         })
 
     }
