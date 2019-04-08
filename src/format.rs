@@ -435,3 +435,28 @@ fn tag_to_str(tag: u64) -> &'static str {
         _ => "UNKNOWN_TAG",
     }
 }
+
+use crate::formats::pe::{
+    self,
+    COFF_header,
+    is_dll, is_exe,
+};
+
+pub fn fmt_pe(header: &COFF_header) {
+
+    print!("PE ");
+
+    if is_dll(header.characteristics) {
+        print!("DLL ");
+    }
+    if is_exe(header.characteristics) {
+        print!("EXE ")
+    }
+
+    print!("{}", pe::machine_to_str(header.machine));
+
+
+
+    println!();
+
+}

@@ -1,9 +1,14 @@
 #![allow(non_camel_case_types)]
+
+include!("pe_constants.rs");
+use ansi_term::Color;
 use scroll::{self, Pread};
+
 
 use crate::Opt;
 use crate::Problem;
 use failure::{Error};
+use crate::format::{fmt_indentln, fmt_pe};
 
 pub const PE_MAGIC: &'static [u8; PE_MAGIC_SIZE] = b"MZ";
 pub const PE_MAGIC_SIZE: usize = 2;
@@ -26,14 +31,14 @@ const PE32_DATA_DIRS_OFFSET:  usize = 24 + 96;
 const PE32_SECTIONS_OFFSET:   usize = 24 + 224;
 
 #[derive(Pread, Debug)]
-struct COFF_header {
-    machine:           u16,
-    n_of_sections:     u16,
-    timedate_stamp:    u32,
-    pointer_to_symtab: u32,
-    n_of_symtab:       u32,
-    sz_of_opt_header:  u16,
-    characteristics:   u16,
+pub struct COFF_header {
+    pub machine:         u16,
+    n_of_sections:       u16,
+    timedate_stamp:      u32,
+    pointer_to_symtab:   u32,
+    n_of_symtab:         u32,
+    sz_of_opt_header:    u16,
+    pub characteristics: u16,
 }
 
 #[derive(Pread, Debug)]
@@ -242,6 +247,7 @@ impl super::FileFormat for Pe {
         let data_dirs;
 
         let mut sections = Vec::with_capacity(coff.n_of_sections as usize);
+
         if coff.sz_of_opt_header > 0 {
             let mut std_coff = buf.pread_with::<Std_COFF_header>(pe_sig + STD_COFF_HEADER_OFFSET, scroll::LE)?;
 
@@ -283,9 +289,61 @@ impl super::FileFormat for Pe {
     }
 
     fn print(&self) -> Result<(), Error> {
+        use prettytable::Table;
 
-        println!("PE");
         println!("{:#X?}", self);
+
+        fmt_pe(&self.coff);
+
+        println!("{}", Color::White.underline().paint("COFF_header"));
+        fmt_indentln(format!("Machine: {:#X}", self.coff.machine));
+        fmt_indentln(format!("Number of sections: {}", self.coff.n_of_sections));
+        fmt_indentln(format!("Timedate stamp: {:#X}", self.coff.timedate_stamp));
+        fmt_indentln(format!("Pointer to symbol table: {:#X}", self.coff.pointer_to_symtab));
+        fmt_indentln(format!("Number of symbols: {}", self.coff.n_of_symtab));
+        fmt_indentln(format!("Size of optional header {}", self.coff.sz_of_opt_header));
+        fmt_indentln(format!("Characteristics: {:#X}", self.coff.characteristics));
+        println!();
+
+        if self.sections.len() > 0 {
+            println!("{}({})",
+                     Color::White.underline().paint("Sections"),
+                     self.sections.len());
+
+            let mut trimmed = false;
+            let mut table = Table::new();
+            let format = prettytable::format::FormatBuilder::new()
+                .padding(1, 1)
+                .build();
+            table.set_format(format);
+            table.add_row(row![r->"Idx", "Name", "VirtSz", "VirtAddr", "SzRawData",
+            "PtrRawData", "PtrRelocs", "PtrLineNum", "nRelocs", "nLinenum", "Characteristics"]);
+
+            for (i, sec) in self.sections.iter().enumerate() {
+                if i == self.opt.trim_lines {
+                    trimmed = true;
+                    break;
+                }
+                table.add_row(row![
+                    i,
+                    std::str::from_utf8(&sec.name)?,
+                    Fg->format!("{:#X}",sec.virt_sz),
+                    Fr->format!("{:#X}",sec.virt_addr),
+                    Fg->format!("{:#X}",sec.sz_raw_data),
+                    Fr->format!("{:#X}",sec.ptr_raw_data),
+                    Fr->format!("{:#X}",sec.ptr_relocs),
+                    Fr->format!("{:#X}",sec.ptr_linenum),
+                    Fm->format!("{:#X}",sec.n_relocs),
+                    Fm->format!("{:#X}",sec.n_linenum),
+                    format!("{:#X}",sec.characteristics),
+                ]);
+            }
+            table.printstd();
+            if trimmed {
+                fmt_indentln(format!("Output trimmed..."));
+            }
+
+        }
 
         Ok(())
     }

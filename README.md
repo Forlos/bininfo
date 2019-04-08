@@ -28,6 +28,9 @@ Warning: Error handling is very basic and hasn't been tested.
 ### Gif
 - https://www.w3.org/Graphics/GIF/spec-gif89a.txt
 
+### Pe
+- https://docs.microsoft.com/en-us/windows/desktop/Debug/pe-format
+
 ### Png
 - http://www.libpng.org/pub/png/pngsuite.html
 - http://www.libpng.org/pub/png/png-sitemap.html#images
