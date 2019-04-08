@@ -32,13 +32,13 @@ const PE32_SECTIONS_OFFSET:   usize = 24 + 224;
 
 #[derive(Pread, Debug)]
 pub struct COFF_header {
-    pub machine:         u16,
-    n_of_sections:       u16,
-    timedate_stamp:      u32,
-    pointer_to_symtab:   u32,
-    n_of_symtab:         u32,
-    sz_of_opt_header:    u16,
-    pub characteristics: u16,
+    pub machine:           u16,
+    pub n_of_sections:     u16,
+    pub timedate_stamp:    u32,
+    pub pointer_to_symtab: u32,
+    pub n_of_symtab:       u32,
+    pub sz_of_opt_header:  u16,
+    pub characteristics:   u16,
 }
 
 #[derive(Pread, Debug)]
@@ -140,28 +140,29 @@ struct Image_data_dir {
     sz:  u32,
 }
 
-#[derive(Pread, Debug)]
+#[derive(Debug)]
 struct Data_dirs {
-    export_tab:   Image_data_dir,
-    import_tab:   Image_data_dir,
-    resource_tab: Image_data_dir,
-    except_tab:   Image_data_dir,
-    cert_tab:     Image_data_dir,
-    basrel_tab:   Image_data_dir,
-    debug_tab:    Image_data_dir,
-    arch_tab:     Image_data_dir,
-    gloptr_tab:   Image_data_dir,
-    tls_tab:      Image_data_dir,
-    loadcfg_tab:  Image_data_dir,
-    bound_imp:    Image_data_dir,
-    iat:          Image_data_dir,
-    // Delay Import Descriptor
-    did:          Image_data_dir,
-    clr_runtime:  Image_data_dir,
-    reserved:     Image_data_dir,
+    dirs: Vec<Image_data_dir>,
+    // export_tab:   Image_data_dir,
+    // import_tab:   Image_data_dir,
+    // resource_tab: Image_data_dir,
+    // except_tab:   Image_data_dir,
+    // cert_tab:     Image_data_dir,
+    // basrel_tab:   Image_data_dir,
+    // debug_tab:    Image_data_dir,
+    // arch_tab:     Image_data_dir,
+    // gloptr_tab:   Image_data_dir,
+    // tls_tab:      Image_data_dir,
+    // loadcfg_tab:  Image_data_dir,
+    // bound_imp:    Image_data_dir,
+    // iat:          Image_data_dir,
+    // // Delay Import Descriptor
+    // did:          Image_data_dir,
+    // clr_runtime:  Image_data_dir,
+    // reserved:     Image_data_dir,
 }
 
-#[derive(Pread, Debug)]
+#[derive(Debug)]
 struct COFF_optional_header {
     std_coff: Std_COFF_header,
     win_fields:  Windows_fields,
@@ -254,19 +255,36 @@ impl super::FileFormat for Pe {
             if std_coff.magic == PE32PLUS_MAGIC {
                 std_coff.base_of_data = 0;
                 win_fields = buf.pread_with(pe_sig + PE32PLUS_WIN_FIELDS_OFFSET, scroll::LE)?;
-                data_dirs = buf.pread_with(pe_sig + PE32PLUS_DATA_DIRS_OFFSET, scroll::LE)?;
+                let mut dirs = Vec::with_capacity(16);
+
+                for i in 0..16 {
+                    dirs.push(buf.pread_with(pe_sig + PE32PLUS_DATA_DIRS_OFFSET + i * 8, scroll::LE)?);
+                }
+                data_dirs = Data_dirs {
+                    dirs,
+                };
 
                 for i in 0..coff.n_of_sections as usize {
                     sections.push(buf.pread_with(pe_sig + PE32PLUS_SECTIONS_OFFSET + i * 40, scroll::LE)?);
                 }
             }
-            else {
+            else if std_coff.magic == PE32_MAGIC {
                 win_fields = Windows_fields::from(buf.pread_with::<Windows_fields_32>(pe_sig + PE32_WIN_FIELDS_OFFSET, scroll::LE)?);
-                data_dirs = buf.pread_with(pe_sig + PE32_DATA_DIRS_OFFSET, scroll::LE)?;
+                let mut dirs = Vec::with_capacity(16);
+
+                for i in 0..16 {
+                    dirs.push(buf.pread_with(pe_sig + PE32PLUS_DATA_DIRS_OFFSET + i * 8, scroll::LE)?);
+                }
+                data_dirs = Data_dirs{
+                    dirs,
+                };
 
                 for i in 0..coff.n_of_sections as usize {
                     sections.push(buf.pread_with(pe_sig + PE32_SECTIONS_OFFSET + i * 40, scroll::LE)?);
                 }
+            }
+            else {
+                return Err(Error::from(Problem::Msg(format!("Invalid PE magic"))));
             }
             coff_optional_header = Some(COFF_optional_header {
                 std_coff,
@@ -295,15 +313,79 @@ impl super::FileFormat for Pe {
 
         fmt_pe(&self.coff);
 
-        println!("{}", Color::White.underline().paint("COFF_header"));
-        fmt_indentln(format!("Machine: {:#X}", self.coff.machine));
-        fmt_indentln(format!("Number of sections: {}", self.coff.n_of_sections));
-        fmt_indentln(format!("Timedate stamp: {:#X}", self.coff.timedate_stamp));
-        fmt_indentln(format!("Pointer to symbol table: {:#X}", self.coff.pointer_to_symtab));
-        fmt_indentln(format!("Number of symbols: {}", self.coff.n_of_symtab));
-        fmt_indentln(format!("Size of optional header: {}", self.coff.sz_of_opt_header));
-        fmt_indentln(format!("Characteristics: {}", characteristics_to_str(self.coff.characteristics)));
-        println!();
+        if let Some(opt) = &self.coff_optional_header {
+            println!("{}", Color::White.underline().paint("Optional Header"));
+            fmt_indentln(format!("Major linker version: {}, Minor linker version: {}",
+                     opt.std_coff.major_link_ver,
+                     opt.std_coff.minor_link_ver));
+            fmt_indentln(format!("Size of code: {:#X}", opt.std_coff.sz_of_code));
+            fmt_indentln(format!("Size of initialized: {:#X}, Size of uninitialized: {:#X}",
+                                 opt.std_coff.sz_of_init,
+                                 opt.std_coff.sz_of_uninit));
+            fmt_indentln(format!("Entry point: {:#X}", opt.std_coff.addr_of_entry));
+            fmt_indentln(format!("Base of code: {:#X}", opt.std_coff.base_of_code));
+            if opt.std_coff.magic == PE32_MAGIC {
+                fmt_indentln(format!("Base of data: {:#X}", opt.std_coff.base_of_data));
+            }
+
+            println!("{}", Color::White.underline().paint("Windows Fields"));
+            fmt_indentln(format!("Image base: {:#X}", opt.win_fields.image_base));
+            fmt_indentln(format!("Section alignment: {:#X}, File alignment: {:#X}",
+                                 opt.win_fields.section_align,
+                                 opt.win_fields.file_align));
+            fmt_indentln(format!("Major OS version: {}, Minor OS version: {}",
+                                 opt.win_fields.major_os_ver,
+                                 opt.win_fields.minor_os_ver));
+            fmt_indentln(format!("Major image version: {}, Minor image version: {}",
+                                 opt.win_fields.major_img_ver,
+                                 opt.win_fields.minor_img_ver));
+            fmt_indentln(format!("Major subsys version: {}, Minor subsys version: {}",
+                                 opt.win_fields.major_sub_ver,
+                                 opt.win_fields.minor_sub_ver));
+            fmt_indentln(format!("Size of image: {:#X}, Size of headers: {:#X}",
+                                 opt.win_fields.sz_of_img,
+                                 opt.win_fields.sz_of_headers));
+            fmt_indentln(format!("Checksum: {:#X}", opt.win_fields.checksum));
+            fmt_indentln(format!("Subsystem: {:#X}", opt.win_fields.subsys));
+            fmt_indentln(format!("DLL Characteristics: {:#X}", opt.win_fields.dll_chara));
+            fmt_indentln(format!("Size of stack commit: {:#X}, Size of stack reserve: {:#X}",
+                                 opt.win_fields.sz_stack_commit,
+                                 opt.win_fields.sz_stack_reserve));
+            fmt_indentln(format!("Size of heap commit: {:#X}, Size of heap reserve: {:#X}",
+                                 opt.win_fields.sz_heap_commit,
+                                 opt.win_fields.sz_heap_reserve));
+            fmt_indentln(format!("Loader flags: {:#X}", opt.win_fields.loader_flags));
+            fmt_indentln(format!("Number of Rva and Sizes: {:#X}", opt.win_fields.n_of_rva));
+
+            println!("{}", Color::White.underline().paint("Data Directories"));
+            let mut trimmed = false;
+            let mut table = Table::new();
+            let format = prettytable::format::FormatBuilder::new()
+                .borders(' ')
+                .column_separator(' ')
+                .padding(1, 1)
+                .build();
+            table.set_format(format);
+            table.add_row(row![r->"Idx", "VirtAddr", "Size"]);
+            for (i, data) in opt.data_dirs.dirs.iter().enumerate() {
+                if i == self.opt.trim_lines {
+                    trimmed = true;
+                    break;
+                }
+                table.add_row(row![
+                    i,
+                    Fr->format!("{:#X}", data.rva),
+                    Fg->format!("{:#X}", data.sz),
+                ]);
+            }
+
+            table.printstd();
+            if trimmed {
+                fmt_indentln(format!("Output trimmed..."));
+            }
+
+            println!();
+        }
 
         if self.sections.len() > 0 {
             println!("{}({})",
@@ -313,6 +395,8 @@ impl super::FileFormat for Pe {
             let mut trimmed = false;
             let mut table = Table::new();
             let format = prettytable::format::FormatBuilder::new()
+                .borders(' ')
+                .column_separator(' ')
                 .padding(1, 1)
                 .build();
             table.set_format(format);

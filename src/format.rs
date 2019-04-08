@@ -439,24 +439,30 @@ fn tag_to_str(tag: u64) -> &'static str {
 use crate::formats::pe::{
     self,
     COFF_header,
-    is_dll, is_exe,
+    is_dll, is_exe,characteristics_to_str,
 };
 
 pub fn fmt_pe(header: &COFF_header) {
+    use ansi_term::Color;
 
     print!("PE ");
 
     if is_dll(header.characteristics) {
-        print!("DLL ");
+        print!("{} ",Color::Blue.paint("DLL"));
     }
     if is_exe(header.characteristics) {
-        print!("EXE ")
+        print!("{} ", Color::Red.paint("EXE"))
     }
 
-    print!("{}", pe::machine_to_str(header.machine));
+    println!("{}", Color::White.paint(pe::machine_to_str(header.machine))) ;
+    println!("{}\n", characteristics_to_str(header.characteristics));
 
-
-
-    println!(":\n");
+    println!("{}",Color::White.underline().paint("Header"));
+    fmt_indentln(format!("Number of sections: {}", header.n_of_sections));
+    fmt_indentln(format!("Timedate stamp: {:#X}", header.timedate_stamp));
+    fmt_indentln(format!("Pointer to symbol table: {:#X}", header.pointer_to_symtab));
+    fmt_indentln(format!("Number of symbols: {}", header.n_of_symtab));
+    fmt_indentln(format!("Size of optional header: {}", header.sz_of_opt_header));
+    println!();
 
 }
