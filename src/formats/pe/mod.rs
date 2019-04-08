@@ -13,6 +13,17 @@ const PE_SIGNATURE: &'static [u8; 4] = b"PE\x00\x00";
 const PE32_MAGIC: u16 = 0x10b;
 const PE32PLUS_MAGIC: u16 = 0x20b;
 
+const COFF_HEADER_OFFSER: usize = 4;
+const STD_COFF_HEADER_OFFSET: usize = 24;
+
+const PE32PLUS_WIN_FIELDS_OFFSET: usize = 24 + 24;
+const PE32PLUS_DATA_DIRS_OFFSET:  usize = 24 + 112;
+const PE32PLUS_SECTIONS_OFFSET:   usize = 24 + 240;
+
+const PE32_WIN_FIELDS_OFFSET: usize = 24 + 28;
+const PE32_DATA_DIRS_OFFSET:  usize = 24 + 96;
+const PE32_SECTIONS_OFFSET:   usize = 24 + 224;
+
 #[allow(non_camel_case_types)]
 #[derive(Pread, Debug)]
 struct COFF_header {
@@ -184,27 +195,27 @@ impl super::FileFormat for Pe {
             return Err(Error::from(Problem::Msg(format!("Invalid PE signature"))));
         }
 
-        let coff = buf.pread_with::<COFF_header>(pe_sig + 4, scroll::LE)?;
-        let mut std_coff = buf.pread_with::<Std_COFF_header>(pe_sig + 24, scroll::LE)?;
+        let coff = buf.pread_with::<COFF_header>(pe_sig + COFF_HEADER_OFFSER, scroll::LE)?;
+        let mut std_coff = buf.pread_with::<Std_COFF_header>(pe_sig + STD_COFF_HEADER_OFFSET, scroll::LE)?;
         let win_fields;
         let data_dirs;
         let mut sections = Vec::with_capacity(coff.n_of_sections as usize);
 
         if std_coff.magic == PE32PLUS_MAGIC {
             std_coff.base_of_data = 0;
-            win_fields = buf.pread_with(pe_sig + 24 + 24, scroll::LE)?;
-            data_dirs = buf.pread_with(pe_sig + 24 + 112, scroll::LE)?;
+            win_fields = buf.pread_with(pe_sig + PE32PLUS_WIN_FIELDS_OFFSET, scroll::LE)?;
+            data_dirs = buf.pread_with(pe_sig + PE32PLUS_DATA_DIRS_OFFSET, scroll::LE)?;
 
-            for _ in 0..coff.n_of_sections {
-                sections.push(buf.pread_with(pe_sig + 24 + 240, scroll::LE)?);
+            for i in 0..coff.n_of_sections as usize {
+                sections.push(buf.pread_with(pe_sig + PE32PLUS_SECTIONS_OFFSET + i * 40, scroll::LE)?);
             }
         }
         else {
-            win_fields = Windows_fields::from(buf.pread_with::<Windows_fields_32>(pe_sig + 24 + 28, scroll::LE)?);
-            data_dirs = buf.pread_with(pe_sig + 24 + 96, scroll::LE)?;
+            win_fields = Windows_fields::from(buf.pread_with::<Windows_fields_32>(pe_sig + PE32_WIN_FIELDS_OFFSET, scroll::LE)?);
+            data_dirs = buf.pread_with(pe_sig + PE32_DATA_DIRS_OFFSET, scroll::LE)?;
 
-            for _ in 0..coff.n_of_sections {
-                sections.push(buf.pread_with(pe_sig + 24 + 224, scroll::LE)?);
+            for i in 0..coff.n_of_sections as usize {
+                sections.push(buf.pread_with(pe_sig + PE32_SECTIONS_OFFSET + i * 40, scroll::LE)?);
             }
         }
 
