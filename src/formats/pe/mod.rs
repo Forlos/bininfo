@@ -1,4 +1,5 @@
-use scroll::{self, Pread, ctx};
+#![allow(non_camel_case_types)]
+use scroll::{self, Pread};
 
 use crate::Opt;
 use crate::Problem;
@@ -24,7 +25,6 @@ const PE32_WIN_FIELDS_OFFSET: usize = 24 + 28;
 const PE32_DATA_DIRS_OFFSET:  usize = 24 + 96;
 const PE32_SECTIONS_OFFSET:   usize = 24 + 224;
 
-#[allow(non_camel_case_types)]
 #[derive(Pread, Debug)]
 struct COFF_header {
     machine:           u16,
@@ -36,7 +36,6 @@ struct COFF_header {
     characteristics:   u16,
 }
 
-#[allow(non_camel_case_types)]
 #[derive(Pread, Debug)]
 struct Std_COFF_header {
     magic:          u16,
@@ -158,6 +157,13 @@ struct Data_dirs {
 }
 
 #[derive(Pread, Debug)]
+struct COFF_optional_header {
+    std_coff: Std_COFF_header,
+    win_fields:  Windows_fields,
+    data_dirs:       Data_dirs,
+}
+
+#[derive(Pread, Debug)]
 struct Section_table {
     name: [u8; 8],
     virt_sz: u32,
@@ -166,20 +172,55 @@ struct Section_table {
     ptr_raw_data: u32,
     ptr_relocs: u32,
     ptr_linenum: u32,
-    n_relocs: u32,
-    n_linenum: u32,
+    n_relocs: u16,
+    n_linenum: u16,
     characteristics: u32,
 }
 
+#[derive(Pread, Debug)]
+struct COFF_reloc {
+    virt_addr:  u32,
+    symtab_idx: u32,
+    c_type:     u16,
+}
+
+#[derive(Pread, Debug)]
+struct COFF_linenum {
+    idx:      u32,
+    line_num: u16,
+}
+
+#[derive(Pread, Debug)]
+struct COFF_symbol_table {
+    name:          [u8; 8],
+    value:         u32,
+    sec_num:       u16,
+    c_type:        u16,
+    storage_class: u8,
+    n_aux_sym:     u8,
+}
+
+// #[derive(Debug)]
+// struct COFF_string_table {
+//     size: u32,
+//     text: String,
+// }
+
+#[derive(Pread, Debug)]
+struct Aux_sym_record_1 {
+    tag_index:   u32,
+    total_sz:    u32,
+    ptr_linenum: u32,
+    ptr_nextfn:  u32,
+    unused:      u16,
+}
 
 #[derive(Debug)]
 pub struct Pe {
     opt:        Opt,
 
     coff:       COFF_header,
-    std_coff:   Std_COFF_header,
-    win_fields: Windows_fields,
-    data_dirs:  Data_dirs,
+    coff_optional_header: Option<COFF_optional_header>,
 
     sections:   Vec<Section_table>,
 }
@@ -196,27 +237,36 @@ impl super::FileFormat for Pe {
         }
 
         let coff = buf.pread_with::<COFF_header>(pe_sig + COFF_HEADER_OFFSER, scroll::LE)?;
-        let mut std_coff = buf.pread_with::<Std_COFF_header>(pe_sig + STD_COFF_HEADER_OFFSET, scroll::LE)?;
+        let mut coff_optional_header = None;
         let win_fields;
         let data_dirs;
+
         let mut sections = Vec::with_capacity(coff.n_of_sections as usize);
+        if coff.sz_of_opt_header > 0 {
+            let mut std_coff = buf.pread_with::<Std_COFF_header>(pe_sig + STD_COFF_HEADER_OFFSET, scroll::LE)?;
 
-        if std_coff.magic == PE32PLUS_MAGIC {
-            std_coff.base_of_data = 0;
-            win_fields = buf.pread_with(pe_sig + PE32PLUS_WIN_FIELDS_OFFSET, scroll::LE)?;
-            data_dirs = buf.pread_with(pe_sig + PE32PLUS_DATA_DIRS_OFFSET, scroll::LE)?;
+            if std_coff.magic == PE32PLUS_MAGIC {
+                std_coff.base_of_data = 0;
+                win_fields = buf.pread_with(pe_sig + PE32PLUS_WIN_FIELDS_OFFSET, scroll::LE)?;
+                data_dirs = buf.pread_with(pe_sig + PE32PLUS_DATA_DIRS_OFFSET, scroll::LE)?;
 
-            for i in 0..coff.n_of_sections as usize {
-                sections.push(buf.pread_with(pe_sig + PE32PLUS_SECTIONS_OFFSET + i * 40, scroll::LE)?);
+                for i in 0..coff.n_of_sections as usize {
+                    sections.push(buf.pread_with(pe_sig + PE32PLUS_SECTIONS_OFFSET + i * 40, scroll::LE)?);
+                }
             }
-        }
-        else {
-            win_fields = Windows_fields::from(buf.pread_with::<Windows_fields_32>(pe_sig + PE32_WIN_FIELDS_OFFSET, scroll::LE)?);
-            data_dirs = buf.pread_with(pe_sig + PE32_DATA_DIRS_OFFSET, scroll::LE)?;
+            else {
+                win_fields = Windows_fields::from(buf.pread_with::<Windows_fields_32>(pe_sig + PE32_WIN_FIELDS_OFFSET, scroll::LE)?);
+                data_dirs = buf.pread_with(pe_sig + PE32_DATA_DIRS_OFFSET, scroll::LE)?;
 
-            for i in 0..coff.n_of_sections as usize {
-                sections.push(buf.pread_with(pe_sig + PE32_SECTIONS_OFFSET + i * 40, scroll::LE)?);
+                for i in 0..coff.n_of_sections as usize {
+                    sections.push(buf.pread_with(pe_sig + PE32_SECTIONS_OFFSET + i * 40, scroll::LE)?);
+                }
             }
+            coff_optional_header = Some(COFF_optional_header {
+                std_coff,
+                win_fields,
+                data_dirs,
+            });
         }
 
 
@@ -225,9 +275,7 @@ impl super::FileFormat for Pe {
             opt,
 
             coff,
-            std_coff,
-            win_fields,
-            data_dirs,
+            coff_optional_header,
 
             sections,
         })
