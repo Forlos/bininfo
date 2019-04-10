@@ -221,6 +221,73 @@ struct Aux_sym_record_1 {
     unused:      u16,
 }
 
+#[derive(Pread, Debug)]
+struct Debug_dir {
+    characteristics: u32,
+    timedate_stamp:  u16,
+    major_ver:       u16,
+    minor_ver:       u16,
+    d_type:          u32,
+    sz_data:         u32,
+    addr_data:       u32,
+    ptr_data:        u32,
+}
+
+
+#[derive(Pread, Debug)]
+struct Export_dir_table {
+    export_flags:        u32,
+    timedate_stamp:      u32,
+    major_ver:           u16,
+    minor_ver:           u16,
+    name_rva:            u32,
+    ord_base:            u32,
+    addr_tab_entries:    u32,
+    n_name_ptr:          u32,
+    export_addr_tab_rva: u32,
+    name_ptr_rva:        u32,
+    ord_tab_rva:         u32,
+}
+
+#[derive(Pread, Debug)]
+struct Import_dir_table {
+    import_lkup_tab_rva: u32,
+    timedate_stamp:      u32,
+    forwarder_chain:     u32,
+    name_rva:            u32,
+    import_addr_tab_rva: u32,
+}
+
+#[derive(Pread, Debug)]
+struct Tls_dir_32 {
+    data_start_rva:  u32,
+    data_end_rva:    u32,
+    idx_addr:        u32,
+    callback_addr:   u32,
+    sz_zero_fill:    u32,
+    characteristics: u32,
+}
+
+#[derive(Pread, Debug)]
+struct Tls_dir {
+    data_start_rva:  u64,
+    data_end_rva:    u64,
+    idx_addr:        u64,
+    callback_addr:   u64,
+    sz_zero_fill:    u32,
+    characteristics: u32,
+}
+
+#[derive(Pread, Debug)]
+struct Rsrc_dir_tab {
+    characteristics: u32,
+    timedate_stamp:  u32,
+    major_ver:       u16,
+    minor_ver:       u16,
+    n_name_entries:  u16,
+    n_id_entries:    u16,
+}
+
 #[derive(Debug)]
 pub struct Pe {
     opt:        Opt,
@@ -273,7 +340,7 @@ impl super::FileFormat for Pe {
                 let mut dirs = Vec::with_capacity(16);
 
                 for i in 0..16 {
-                    dirs.push(buf.pread_with(pe_sig + PE32PLUS_DATA_DIRS_OFFSET + i * 8, scroll::LE)?);
+                    dirs.push(buf.pread_with(pe_sig + PE32_DATA_DIRS_OFFSET + i * 8, scroll::LE)?);
                 }
                 data_dirs = Data_dirs{
                     dirs,
@@ -308,8 +375,7 @@ impl super::FileFormat for Pe {
 
     fn print(&self) -> Result<(), Error> {
         use prettytable::Table;
-
-        println!("{:#X?}", self);
+        // println!("{:#X?}", self);
 
         fmt_pe(&self.coff);
 
@@ -346,8 +412,8 @@ impl super::FileFormat for Pe {
                                  opt.win_fields.sz_of_img,
                                  opt.win_fields.sz_of_headers));
             fmt_indentln(format!("Checksum: {:#X}", opt.win_fields.checksum));
-            fmt_indentln(format!("Subsystem: {:#X}", opt.win_fields.subsys));
-            fmt_indentln(format!("DLL Characteristics: {:#X}", opt.win_fields.dll_chara));
+            fmt_indentln(format!("Subsystem: {}", subsys_to_str(opt.win_fields.subsys)));
+            fmt_indentln(format!("DLL Characteristics: {}", dllchara_to_str(opt.win_fields.dll_chara)));
             fmt_indentln(format!("Size of stack commit: {:#X}, Size of stack reserve: {:#X}",
                                  opt.win_fields.sz_stack_commit,
                                  opt.win_fields.sz_stack_reserve));
@@ -419,7 +485,7 @@ impl super::FileFormat for Pe {
                     Fr->format!("{:#X}",sec.ptr_linenum),
                     Fm->format!("{:#X}",sec.n_relocs),
                     Fm->format!("{:#X}",sec.n_linenum),
-                    format!("{:#X}",sec.characteristics),
+                    section_chara_to_str(sec.characteristics),
                 ]);
             }
             table.printstd();
