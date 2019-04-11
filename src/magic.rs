@@ -16,6 +16,7 @@ pub enum Format {
     Pdf,
     Jpg,
     Pe,
+    JavaClass,
     Unknown,
 }
 
@@ -61,6 +62,9 @@ fn check_magic(magic: &[u8; MAGIC_SIZE]) -> Result<Format, Error> {
         }
     else if &magic[0..pe::PE_MAGIC_SIZE] == pe::PE_MAGIC {
         Ok(Format::Pe)
+    }
+    else if &magic[0..javaclass::CLASS_MAGIC_SIZE] == javaclass::CLASS_MAGIC {
+        Ok(Format::JavaClass)
     }
     else {
         Ok(Format::Unknown)

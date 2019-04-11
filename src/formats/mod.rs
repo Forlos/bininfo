@@ -5,6 +5,7 @@ pub mod gif;
 pub mod pdf;
 pub mod jpg;
 pub mod pe;
+pub mod javaclass;
 
 use crate::Opt;
 use failure::{Error};

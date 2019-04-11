@@ -15,6 +15,7 @@ pub enum Binary {
     Pdf(pdf::Pdf),
     Jpg(jpg::Jpg),
     Pe(pe::Pe),
+    JavaClass(javaclass::JavaClass),
     Unknown,
 }
 
@@ -32,6 +33,7 @@ impl Binary {
             Format::Pdf => Ok(Binary::Pdf(pdf::Pdf::parse(opt, buf)?)),
             Format::Jpg => Ok(Binary::Jpg(jpg::Jpg::parse(opt, buf)?)),
             Format::Pe => Ok(Binary::Pe(pe::Pe::parse(opt, buf)?)),
+            Format::JavaClass => Ok(Binary::JavaClass(javaclass::JavaClass::parse(opt, buf)?)),
             Format::Unknown => Ok(Binary::Unknown),
         }
 

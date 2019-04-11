@@ -93,6 +93,9 @@ fn run(opt: Opt) -> Result<(), Error> {
         Binary::Pe(pe) => {
             pe.print()?;
         }
+        Binary::JavaClass(java_class) => {
+            java_class.print()?;
+        }
         Binary::Unknown  => {
             use ansi_term::Color;
 
