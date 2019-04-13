@@ -1,3 +1,4 @@
+#![allow(non_camel_case_types)]
 include!("./class_constants.rs");
 
 use failure::{Error};
@@ -5,6 +6,7 @@ use scroll::{self, Pread};
 
 use crate::Opt;
 use crate::Problem;
+use crate::format::{fmt_indentln};
 
 pub const CLASS_MAGIC: &'static [u8; CLASS_MAGIC_SIZE] = b"\xCA\xFE\xBA\xBE";
 pub const CLASS_MAGIC_SIZE: usize = 4;
@@ -29,7 +31,7 @@ struct Class_header {
     attribute_tab:    Vec<Attribute_info>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, AsRefStr)]
 enum Constants {
     UTF8{len: u16, text: String},
     Integer(u32),
@@ -48,6 +50,59 @@ enum Constants {
     InvokeDynamic{bootstrap_method_attr_idx: u16, nametype_idx: u16},
     Module{name_idx: u16},
     Package{name_idx: u16},
+    Ghost,
+}
+
+impl Constants {
+    pub fn values_to_string(&self, const_tab: &Vec<Constants>) -> String {
+        use Constants::*;
+        use ansi_term::Color;
+
+        match self {
+            UTF8{len: _len, text}                                  => format!("{}", text),
+            Integer(int)                                           => format!("{}", Color::Fixed(120).paint(format!("{}", int))),
+            Float(float)                                           => format!("{}", Color::Fixed(120).paint(format!("{}", float))),
+            Long(long)                                             => format!("{}", Color::Fixed(120).paint(format!("{}", long))),
+            Double(double)                                         => format!("{}", Color::Fixed(120).paint(format!("{}", double))),
+            ClassRef{name_idx}                                     => format!("{}({})",
+                                                                              Color::Yellow.paint(const_tab[*name_idx as usize - 1].values_to_string(const_tab)),
+                                                                              Color::Red.paint(format!("{}", name_idx))),
+            StringRef{string_idx}                                  => format!("\"{}\"({})",
+                                                                              Color::Purple.paint(const_tab[*string_idx as usize - 1].values_to_string(const_tab)),
+                                                                              Color::Red.paint(format!("{}", string_idx))),
+            FieldRef{class_idx, nametype_idx}                      => format!("{}, {}",
+                                                                              const_tab[*class_idx as usize - 1].values_to_string(const_tab),
+                                                                              const_tab[*nametype_idx as usize - 1].values_to_string(const_tab)),
+            MethodRef{class_idx, nametype_idx}                     => format!("{}, {}",
+                                                                              const_tab[*class_idx as usize - 1].values_to_string(const_tab),
+                                                                              const_tab[*nametype_idx as usize - 1].values_to_string(const_tab)),
+            InterfaceMethodRef{class_idx, nametype_idx}            => format!("{}, {}",
+                                                                              const_tab[*class_idx as usize - 1].values_to_string(const_tab),
+                                                                              const_tab[*nametype_idx as usize - 1].values_to_string(const_tab)),
+            NameAndType{name_idx, desc_idx}                        => format!("{}({}), {}({})",
+                                                                              Color::Blue.paint(const_tab[*name_idx as usize - 1].values_to_string(const_tab)),
+                                                                              Color::Red.paint(format!("{}", name_idx)),
+                                                                              Color::Green.paint(const_tab[*desc_idx as usize - 1].values_to_string(const_tab)),
+                                                                              Color::Red.paint(format!("{}", desc_idx))),
+            MethodHandle{kind, idx}                                => format!("{}, {}({})",
+                                                                              ref_kind_to_str(*kind),
+                                                                              const_tab[*idx as usize - 1].values_to_string(const_tab),
+                                                                              Color::Red.paint(format!("{}", idx))),
+            MethodType{desc_idx}                                   => format!("{}({})",
+                                                                              const_tab[*desc_idx as usize - 1].values_to_string(const_tab),
+                                                                              Color::Red.paint(format!("{}", desc_idx))),
+            Dynamic{bootstrap_method_attr_idx, nametype_idx}       => format!("Bootstrap: {} Name and type index: {}", bootstrap_method_attr_idx, nametype_idx),
+            InvokeDynamic{bootstrap_method_attr_idx, nametype_idx} => format!("Bootstrap: {} Name and type index:{}", bootstrap_method_attr_idx, nametype_idx),
+            Module{name_idx}                                       => format!("{}({})",
+                                                                              const_tab[*name_idx as usize - 1].values_to_string(const_tab),
+                                                                              Color::Red.paint(format!("{}", name_idx))),
+            Package{name_idx}                                      => format!("{}({})",
+                                                                              const_tab[*name_idx as usize - 1].values_to_string(const_tab),
+                                                                              Color::Red.paint(format!("{}", name_idx))),
+            Ghost                                                  => format!(""),
+        }
+
+    }
 }
 
 #[derive(Debug)]
@@ -95,7 +150,8 @@ impl super::FileFormat for JavaClass {
         let const_pool_count: u16 = buf.gread_with(offset, scroll::BE)?;
         let mut const_pool_tab = Vec::with_capacity(const_pool_count as usize);
 
-        for _ in 1..const_pool_count as usize {
+        let mut i = 1;
+        while i < const_pool_count {
             let tag: u8 = buf.gread(offset)?;
 
             match tag {
@@ -114,10 +170,16 @@ impl super::FileFormat for JavaClass {
                     const_pool_tab.push(Constants::Float(buf.gread_with(offset, scroll::BE)?));
                 },
                 CONSTANT_LONG => {
-                    const_pool_tab.push(Constants::Long(buf.gread_with(offset, scroll::BE)?));
+                    // All 8-byte constants take up two entries in the constant_pool table of the class file.
+                    const_pool_tab.push(Constants::Long(buf.gread_with::<u64>(offset, scroll::BE)?));
+                    const_pool_tab.push(Constants::Ghost);
+                    i += 1;
                 },
                 CONSTANT_DOUBLE => {
-                    const_pool_tab.push(Constants::Double(buf.gread_with(offset, scroll::BE)?));
+                    // All 8-byte constants take up two entries in the constant_pool table of the class file.
+                    const_pool_tab.push(Constants::Double(buf.gread_with::<f64>(offset, scroll::BE)?));
+                    const_pool_tab.push(Constants::Ghost);
+                    i += 1;
                 },
                 CONSTANT_CLASS => {
                     const_pool_tab.push(Constants::ClassRef{name_idx: buf.gread_with(offset, scroll::BE)?});
@@ -176,9 +238,11 @@ impl super::FileFormat for JavaClass {
                 CONSTANT_PACKAGE => {
                     const_pool_tab.push(Constants::Package{name_idx: buf.gread_with(offset, scroll::BE)?});
                 },
-                _ => return Err(Error::from(Problem::Msg(format!("Invalid constant tag")))),
+                _ => return Err(Error::from(Problem::Msg(format!("Invalid constant tag: {} at: {:#X}, {:#X}", tag, offset, const_pool_tab.len())))),
 
             }
+
+            i += 1;
 
         }
 
@@ -188,22 +252,22 @@ impl super::FileFormat for JavaClass {
         let interface_count: u16 = buf.gread_with(offset, scroll::BE)?;
         let mut interface_tab = Vec::with_capacity(interface_count as usize);
 
-        for i in 0..interface_count as usize {
+        for _ in 0..interface_count as usize {
             interface_tab.push(buf.gread_with(offset, scroll::BE)?);
         }
 
         let field_count: u16 = buf.gread_with(offset, scroll::BE)?;
         let mut field_tab = Vec::with_capacity(field_count as usize);
-        for i in 0..field_count as usize {
+        for _ in 0..field_count as usize {
             let access_flags: u16    = buf.gread_with(offset, scroll::BE)?;
             let name_idx: u16        = buf.gread_with(offset, scroll::BE)?;
             let descriptor_idx: u16  = buf.gread_with(offset, scroll::BE)?;
             let attribute_count: u16 = buf.gread_with(offset, scroll::BE)?;
             let mut attributes       = Vec::with_capacity(attribute_count as usize);
-            for j in 0..attribute_count as usize {
+            for _ in 0..attribute_count as usize {
                 let attribute_name_idx: u16 = buf.gread_with(offset, scroll::BE)?;
                 let attribute_len: u32      = buf.gread_with(offset, scroll::BE)?;
-                let mut info                = buf[*offset..*offset + attribute_len as usize].to_vec();
+                let info                    = buf[*offset..*offset + attribute_len as usize].to_vec();
                 *offset += attribute_len as usize;
                 attributes.push(Attribute_info {attribute_name_idx, attribute_len, info});
             }
@@ -219,16 +283,16 @@ impl super::FileFormat for JavaClass {
 
         let method_count: u16 = buf.gread_with(offset, scroll::BE)?;
         let mut method_tab = Vec::with_capacity(method_count as usize);
-        for i in 0..method_count as usize {
+        for _ in 0..method_count as usize {
             let access_flags: u16    = buf.gread_with(offset, scroll::BE)?;
             let name_idx: u16        = buf.gread_with(offset, scroll::BE)?;
             let descriptor_idx: u16  = buf.gread_with(offset, scroll::BE)?;
             let attribute_count: u16 = buf.gread_with(offset, scroll::BE)?;
             let mut attributes       = Vec::with_capacity(attribute_count as usize);
-            for j in 0..attribute_count as usize {
+            for _ in 0..attribute_count as usize {
                 let attribute_name_idx: u16 = buf.gread_with(offset, scroll::BE)?;
                 let attribute_len: u32      = buf.gread_with(offset, scroll::BE)?;
-                let mut info                = buf[*offset..*offset + attribute_len as usize].to_vec();
+                let info                    = buf[*offset..*offset + attribute_len as usize].to_vec();
                 *offset += attribute_len as usize;
                 attributes.push(Attribute_info {attribute_name_idx, attribute_len, info});
             }
@@ -244,10 +308,10 @@ impl super::FileFormat for JavaClass {
 
         let attribute_count: u16 = buf.gread_with(offset, scroll::BE)?;
         let mut attribute_tab = Vec::with_capacity(attribute_count as usize);
-        for i in 0..attribute_count as usize {
+        for _ in 0..attribute_count as usize {
             let attribute_name_idx: u16 = buf.gread_with(offset, scroll::BE)?;
             let attribute_len: u32      = buf.gread_with(offset, scroll::BE)?;
-            let mut info                = buf[*offset..*offset + attribute_len as usize].to_vec();
+            let info                    = buf[*offset..*offset + attribute_len as usize].to_vec();
             *offset += attribute_len as usize;
             attribute_tab.push(Attribute_info {attribute_name_idx, attribute_len, info});
         }
@@ -294,19 +358,75 @@ impl super::FileFormat for JavaClass {
         println!("{}", Color::Blue.paint(java_version_to_str(
             self.class_header.minor_ver,
             self.class_header.major_ver)));
+        println!("{}", access_flags_to_str(self.class_header.access_flags));
+        println!("Class: {}",
+                 self.class_header.const_pool_tab[self.class_header.this_class as usize - 1].values_to_string(&self.class_header.const_pool_tab));
+        println!("Super Class: {}",
+                 self.class_header.const_pool_tab[self.class_header.super_class as usize - 1].values_to_string(&self.class_header.const_pool_tab));
+        println!();
 
-        println!("Class flags: {}", access_flags_to_str(self.class_header.access_flags));
 
+        if self.class_header.const_pool_tab.len() >= 1 {
+            println!("{}", Color::White.underline().paint("Constants"));
 
-        // if self.class_header.const_pool_tab.len() >= 1 {
-        //     let mut table = Table::new();
-        //     let format = prettytable::format::FormatBuilder::new()
-        //         .borders(' ')
-        //         .column_separator(' ')
-        //         .padding(1, 1)
-        //         .build();
-        //     table.set_format(format);
-        // }
+            let mut trimmed = false;
+            let mut table = Table::new();
+            let format = prettytable::format::FormatBuilder::new()
+                .borders(' ')
+                .column_separator(' ')
+                .padding(1, 1)
+                .build();
+            table.set_format(format);
+            table.add_row(row!["Idx", "Type", "Value"]);
+
+            for (i, entry) in self.class_header.const_pool_tab.iter().enumerate() {
+                if i == self.opt.trim_lines {
+                    trimmed = true;
+                    break;
+                }
+                table.add_row(row![
+                    i + 1,
+                    format!("{}", entry.as_ref()),
+                    entry.values_to_string(&self.class_header.const_pool_tab),
+                ]);
+            }
+            table.printstd();
+            if trimmed {
+                fmt_indentln(format!("Output trimmed..."));
+            }
+            println!();
+
+        }
+
+        if self.class_header.interface_tab.len() >= 1 {
+            println!("{}", Color::White.underline().paint("Interfaces"));
+
+            let mut trimmed = false;
+            let mut table = Table::new();
+            let format = prettytable::format::FormatBuilder::new()
+                .borders(' ')
+                .column_separator(' ')
+                .padding(1, 1)
+                .build();
+            table.set_format(format);
+            table.add_row(row!["Idx", "Name"]);
+
+            for (i, entry) in self.class_header.interface_tab.iter().enumerate() {
+                if i == self.opt.trim_lines {
+                    trimmed = true;
+                    break;
+                }
+                table.add_row(row![
+                    i + 1,
+                    self.class_header.const_pool_tab[*entry as usize - 1].values_to_string(&self.class_header.const_pool_tab),
+                ]);
+            }
+            table.printstd();
+            if trimmed {
+                fmt_indentln(format!("Output trimmed..."));
+            }
+            println!();
+        }
 
         Ok(())
     }

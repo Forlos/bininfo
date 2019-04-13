@@ -7,6 +7,8 @@ extern crate prettytable;
 extern crate scroll_derive;
 extern crate scroll;
 extern crate structopt;
+#[macro_use]
+extern crate strum_macros;
 extern crate textwrap;
 
 mod magic;
