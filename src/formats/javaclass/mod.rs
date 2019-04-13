@@ -154,11 +154,162 @@ enum Attributes {
         attributes:  Vec<Attribute_info>,
     },
     StackMapTable {
+        name_idx:  u16,
+        attr_len:  u32,
+        n_entries: u16,
+        entries:   Vec<u8>
+    },
+    Exceptions {
+        name_idx:   u16,
+        attr_len:   u32,
+        n_of_ex:    u16,
+        ex_idx_tab: Vec<u16>,
+    },
+    InnerClasses {
+        name_idx:     u16,
+        attr_len:     u32,
+        n_of_classes: u16,
+        classes:      Vec<Inner_class>,
+    },
+    EnclosingMethod {
+        name_idx:   u16,
+        attr_len:   u32,
+        class_idx:  u16,
+        method_idx: u16,
+    },
+    Synthetic {
         name_idx: u16,
         attr_len: u32,
-        n_entries: u16,
-        entries: Vec<u8>
     },
+    Signature {
+        name_idx: u16,
+        attr_len: u32,
+        sig_idx: u16,
+    },
+    SourceFile {
+        name_idx: u16,
+        attr_len: u32,
+        source_idx: u16,
+    },
+    SourceDebugExtension {
+        name_idx: u16,
+        attr_len: u32,
+        debug_ext: Vec<u8>,
+    },
+    LineNumberTable {
+        name_idx:         u16,
+        attr_len:         u32,
+        line_num_tab_len: u16,
+        line_num_tab:     Vec<Line_number>,
+    },
+    LocalVariableTable {
+        name_idx:          u16,
+        attr_len:          u32,
+        local_var_tab_len: u16,
+        local_var_tab:     Vec<Local_variable>,
+    },
+    LocalVariableTypeTable {
+        name_idx:               u16,
+        attr_len:               u32,
+        local_var_type_tab_len: u16,
+        local_var_type_tab:     Vec<Local_variable_type>,
+    },
+    Deprecated {
+        name_idx: u16,
+        attr_len: u32,
+    },
+    RuntimeVisibleAnnotations {
+        name_idx: u16,
+        attr_len: u32,
+        num_anno: u16,
+        anno:     Vec<Annotation>,
+    },
+    RuntimeInvisibleAnnotations {
+        name_idx: u16,
+        attr_len: u32,
+        num_anno: u16,
+        anno:     Vec<Annotation>,
+    },
+    RuntimeVisibleParameterAnnotations {
+        name_idx:   u16,
+        attr_len:   u32,
+        num_params: u8,
+        param_anno: Vec<Parameter_annotations>,
+    },
+    RuntimeInvisibleParameterAnnotations {
+        name_idx:   u16,
+        attr_len:   u32,
+        num_params: u8,
+        param_anno: Vec<Parameter_annotations>,
+    },
+    RuntimeVisibleTypeAnnotations {
+        name_idx: u16,
+        attr_len: u32,
+        num_anno: u16,
+        anno: Vec<Type_annotation>,
+    },
+    RuntimeInvisibleTypeAnnotations {
+        name_idx: u16,
+        attr_len: u32,
+        num_anno: u16,
+        anno: Vec<Type_annotation>,
+    },
+    AnnotationDefault {
+        name_idx: u16,
+        attr_len: u32,
+        default_value: Element_value,
+    },
+    BootstrapMethods {
+        name_idx:            u16,
+        attr_len:            u32,
+        n_bootstrap_methods: u16,
+        bootstrap_methods:   Vec<Bootstrap_method>,
+    },
+    MethodParameters {
+        name_idx:     u16,
+        attr_len:     u32,
+        params_count: u8,
+        params: Vec<Parameter>,
+    },
+    Module {
+        name_idx:     u16,
+        attr_len:     u32,
+        mod_name_idx: u16,
+        mod_flags:    u16,
+        mod_ver_idx:  u16,
+        required_cnt: u16,
+        required:     Vec<Require>,
+        exports_cnt:  u16,
+        exports:      Vec<Export>,
+        opens_cnt:    u16,
+        opens:        Vec<Open>,
+        uses_cnt:     u16,
+        uses_idx:     Vec<u16>,
+        provides_cnt: u16,
+        provides:     Vec<Provide>,
+    },
+    ModulePackages {
+        name_idx: u16,
+        attr_len: u32,
+        package_cnt: u16,
+        package_idx: Vec<u16>,
+    },
+    ModuleMainClass {
+        name_idx: u16,
+        attr_len: u32,
+        main_class_idx: u16,
+    },
+    NestHost {
+        name_idx: u16,
+        attr_len: u32,
+        host_class_idx: u16,
+    },
+    NestMembers {
+        name_idx: u16,
+        attr_len: u32,
+        n_of_classes: u16,
+        classes: Vec<u16>,
+    }
 }
 
 #[derive(Debug)]
@@ -167,6 +318,159 @@ struct Exception {
     end_pc:     u16,
     handler_pc: u16,
     catch_type: u16,
+}
+
+#[derive(Debug)]
+struct Inner_class {
+    inner_class_info_idx:     u16,
+    outer_class_info_idx:     u16,
+    inner_name_idx:           u16,
+    inner_class_access_flags: u16,
+}
+
+#[derive(Debug)]
+struct Line_number {
+    start_pc: u16,
+    line_num: u16,
+}
+
+#[derive(Debug)]
+struct Local_variable {
+    start_pc: u16,
+    len:      u16,
+    name_idx: u16,
+    desc_idx: u16,
+    idx:      u16,
+}
+
+#[derive(Debug)]
+struct Local_variable_type {
+    start_pc: u16,
+    len:      u16,
+    name_idx: u16,
+    sig_idx:  u16,
+    idx:      u16,
+}
+
+#[derive(Debug)]
+struct Annotation {
+    type_idx:        u16,
+    n_ele_val_pairs: u16,
+    ele_val_pairs:   Vec<Element_value>,
+}
+
+#[derive(Debug)]
+enum Value {
+    ConstValueIdx(u16),
+    EnumConstValue(u16,u16),
+    ClassInfoIdx(u16),
+    AnnotationValue(Annotation),
+    ArrayValue(u16, Vec<Element_value>),
+}
+
+#[derive(Debug)]
+struct Element_value {
+    tag:   u8,
+    value: Value,
+}
+
+#[derive(Debug)]
+struct Parameter_annotations {
+    num_anno: u16,
+    anno:     Vec<Annotation>,
+}
+
+#[derive(Debug)]
+struct Type_annotation {
+    target_type: u8,
+    target_info: Vec<TargetInfo>,
+    target_path: Type_path,
+    type_idx: u16,
+    n_ele_var_pairs: u16,
+    ele_var_pairs: Vec<Name_element_value>,
+}
+
+#[derive(Debug)]
+enum TargetInfo {
+    TypeParameter(u8),
+    Supertype(u16),
+    TypeParameterBound(u8,u8),
+    Empty,
+    FormatParameter(u8),
+    Throws(u16),
+    LocalVar(u16, Vec<Local_var>),
+    Catch(u16),
+    Offset(u16),
+    TypeArgument(u16,u8),
+}
+
+#[derive(Debug)]
+struct Local_var {
+    start_pc: u16,
+    len:      u16,
+    idx:      u16,
+}
+
+#[derive(Debug)]
+struct Type_path {
+    path_len: u8,
+    path:     Vec<Path>,
+}
+
+#[derive(Debug)]
+struct Path {
+    kind: u8,
+    idx:  u8,
+}
+
+#[derive(Debug)]
+struct Name_element_value {
+    name_idx: u16,
+    value:    Element_value,
+}
+
+#[derive(Debug)]
+struct Bootstrap_method {
+    bootstrap_method_ref: u16,
+    n_bootstrap_args: u16,
+    bootstrap_args: Vec<u16>,
+}
+
+#[derive(Debug)]
+struct Parameter {
+    name_idx: u16,
+    access_flags: u16,
+}
+
+
+#[derive(Debug)]
+struct Require {
+    idx:     u16,
+    flags:   u16,
+    ver_idx: u16,
+}
+
+#[derive(Debug)]
+struct Export {
+    idx:    u16,
+    flags:  u16,
+    to_cnt: u16,
+    to_idx: Vec<u16>,
+}
+
+#[derive(Debug)]
+struct Open {
+    idx:    u16,
+    flags:  u16,
+    to_cnt: u16,
+    to_idx: Vec<u16>,
+}
+
+#[derive(Debug)]
+struct Provide {
+    idx:      u16,
+    with_cnt: u16,
+    with_idx: Vec<u16>,
 }
 
 #[derive(Debug)]
