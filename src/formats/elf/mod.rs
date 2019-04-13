@@ -1170,7 +1170,7 @@ impl super::FileFormat for Elf {
                  Color::White.paint("SymbolTable"),
                  self.symtab.len());
         if self.symtab.len() > 0 {
-            fmt_elf_sym_table(&self.symtab, &self.symstr, &self.section_headers, &self.sh_strtab)
+            fmt_elf_sym_table(&self.symtab, &self.symstr, &self.section_headers, &self.sh_strtab, self.opt.wrap_chars)
                 .map_err(|e| Problem::Msg(format!("Could not print Symbol table: {}", e)))?;
         }
         println!();
@@ -1182,7 +1182,7 @@ impl super::FileFormat for Elf {
                  Color::White.paint("DynSymTable"),
                  self.dynsym.len());
         if self.dynsym.len() > 0 {
-            fmt_elf_sym_table(&self.dynsym, &self.dynstr, &self.section_headers, &self.sh_strtab)
+            fmt_elf_sym_table(&self.dynsym, &self.dynstr, &self.section_headers, &self.sh_strtab, self.opt.wrap_chars)
                 .map_err(|e| Problem::Msg(format!("Could not print DynSym table: {}", e)))?;
 
         }
@@ -1195,7 +1195,7 @@ impl super::FileFormat for Elf {
                  Color::White.paint("RelDynTable"),
                  self.reldyn.len());
         if self.reldyn.len() > 0 {
-            fmt_elf_rel_table(&self.reldyn, &self.dynsym, &self.dynstr, self.header.e_machine)
+            fmt_elf_rel_table(&self.reldyn, &self.dynsym, &self.dynstr, self.header.e_machine, self.opt.wrap_chars)
                 .map_err(|e| Problem::Msg(format!("Could not print RelDyn table: {}", e)))?;
 
         }
@@ -1208,7 +1208,7 @@ impl super::FileFormat for Elf {
                  Color::White.paint("RelPltTable"),
                  self.relplt.len());
         if self.relplt.len() > 0 {
-            fmt_elf_rel_table(&self.relplt, &self.dynsym, &self.dynstr, self.header.e_machine)
+            fmt_elf_rel_table(&self.relplt, &self.dynsym, &self.dynstr, self.header.e_machine, self.opt.wrap_chars)
                 .map_err(|e| Problem::Msg(format!("Could not print RelPlt table: {}", e)))?;
         }
         println!();
@@ -1220,7 +1220,7 @@ impl super::FileFormat for Elf {
                  Color::White.paint("RelaDynTable"),
                  self.reladyn.len());
         if self.reladyn.len() > 0 {
-            fmt_elf_rela_table(&self.reladyn, &self.dynsym, &self.dynstr, self.header.e_machine)
+            fmt_elf_rela_table(&self.reladyn, &self.dynsym, &self.dynstr, self.header.e_machine, self.opt.wrap_chars)
                 .map_err(|e| Problem::Msg(format!("Could not print RelaDyn table: {}", e)))?;
         }
         println!();
@@ -1232,7 +1232,7 @@ impl super::FileFormat for Elf {
                  Color::White.paint("RelaPltTable"),
                  self.relaplt.len());
         if self.relaplt.len() > 0 {
-            fmt_elf_rela_table(&self.relaplt, &self.dynsym, &self.dynstr, self.header.e_machine)
+            fmt_elf_rela_table(&self.relaplt, &self.dynsym, &self.dynstr, self.header.e_machine, self.opt.wrap_chars)
                 .map_err(|e| Problem::Msg(format!("Could not print RelaPlt table: {}", e)))?;
         }
         println!();

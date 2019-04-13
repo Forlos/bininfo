@@ -91,8 +91,12 @@ impl Constants {
             MethodType{desc_idx}                                   => format!("{}({})",
                                                                               const_tab[*desc_idx as usize - 1].values_to_string(const_tab),
                                                                               Color::Red.paint(format!("{}", desc_idx))),
-            Dynamic{bootstrap_method_attr_idx, nametype_idx}       => format!("Bootstrap: {} Name and type index: {}", bootstrap_method_attr_idx, nametype_idx),
-            InvokeDynamic{bootstrap_method_attr_idx, nametype_idx} => format!("Bootstrap: {} Name and type index:{}", bootstrap_method_attr_idx, nametype_idx),
+            Dynamic{bootstrap_method_attr_idx, nametype_idx}       => format!("Bootstrap: {} {}",
+                                                                              bootstrap_method_attr_idx,
+                                                                              const_tab[*nametype_idx as usize - 1].values_to_string(const_tab)),
+            InvokeDynamic{bootstrap_method_attr_idx, nametype_idx} => format!("Bootstrap: {} {}",
+                                                                              bootstrap_method_attr_idx,
+                                                                              const_tab[*nametype_idx as usize - 1].values_to_string(const_tab)),
             Module{name_idx}                                       => format!("{}({})",
                                                                               const_tab[*name_idx as usize - 1].values_to_string(const_tab),
                                                                               Color::Red.paint(format!("{}", name_idx))),
@@ -107,27 +111,62 @@ impl Constants {
 
 #[derive(Debug)]
 struct Field_info {
-    access_flags:    u16,
-    name_idx:        u16,
-    descriptor_idx:  u16,
-    attribute_count: u16,
-    attributes:      Vec<Attribute_info>,
+    access_flags: u16,
+    name_idx:     u16,
+    desc_idx:     u16,
+    attr_count:   u16,
+    attributes:   Vec<Attribute_info>,
 }
 
 #[derive(Debug)]
 struct Method_info {
-    access_flags:     u16,
-    name_idx:       u16,
-    descriptor_idx: u16,
-    attribute_count: u16,
-    attributes:       Vec<Attribute_info>,
+    access_flags: u16,
+    name_idx:     u16,
+    desc_idx:     u16,
+    attr_count:   u16,
+    attributes:   Vec<Attribute_info>,
 }
 
 #[derive(Debug)]
 struct Attribute_info {
-    attribute_name_idx: u16,
-    attribute_len:      u32,
-    info:               Vec<u8>,
+    attr_name_idx: u16,
+    attr_len:      u32,
+    info:          Vec<u8>,
+}
+
+#[derive(Debug)]
+enum Attributes {
+    ConstantValue {
+        name_idx:  u16,
+        attr_len:  u32,
+        const_idx: u16,
+    },
+    Code {
+        name_idx:    u16,
+        attr_len:    u32,
+        max_stack:   u16,
+        max_locals:  u16,
+        code_length: u32,
+        code:        Vec<u8>,
+        ex_tab_len:  u16,
+        ex_tab:      Vec<Exception>,
+        attr_count:  u16,
+        attributes:  Vec<Attribute_info>,
+    },
+    StackMapTable {
+        name_idx: u16,
+        attr_len: u32,
+        n_entries: u16,
+        entries: Vec<u8>
+    },
+}
+
+#[derive(Debug)]
+struct Exception {
+    start_pc:   u16,
+    end_pc:     u16,
+    handler_pc: u16,
+    catch_type: u16,
 }
 
 #[derive(Debug)]
@@ -261,21 +300,21 @@ impl super::FileFormat for JavaClass {
         for _ in 0..field_count as usize {
             let access_flags: u16    = buf.gread_with(offset, scroll::BE)?;
             let name_idx: u16        = buf.gread_with(offset, scroll::BE)?;
-            let descriptor_idx: u16  = buf.gread_with(offset, scroll::BE)?;
-            let attribute_count: u16 = buf.gread_with(offset, scroll::BE)?;
-            let mut attributes       = Vec::with_capacity(attribute_count as usize);
-            for _ in 0..attribute_count as usize {
-                let attribute_name_idx: u16 = buf.gread_with(offset, scroll::BE)?;
-                let attribute_len: u32      = buf.gread_with(offset, scroll::BE)?;
-                let info                    = buf[*offset..*offset + attribute_len as usize].to_vec();
-                *offset += attribute_len as usize;
-                attributes.push(Attribute_info {attribute_name_idx, attribute_len, info});
+            let desc_idx: u16  = buf.gread_with(offset, scroll::BE)?;
+            let attr_count: u16 = buf.gread_with(offset, scroll::BE)?;
+            let mut attributes       = Vec::with_capacity(attr_count as usize);
+            for _ in 0..attr_count as usize {
+                let attr_name_idx: u16 = buf.gread_with(offset, scroll::BE)?;
+                let attr_len: u32      = buf.gread_with(offset, scroll::BE)?;
+                let info                    = buf[*offset..*offset + attr_len as usize].to_vec();
+                *offset += attr_len as usize;
+                attributes.push(Attribute_info {attr_name_idx, attr_len, info});
             }
             let field = Field_info {
                 access_flags,
                 name_idx,
-                descriptor_idx,
-                attribute_count,
+                desc_idx,
+                attr_count,
                 attributes,
             };
             field_tab.push(field);
@@ -286,21 +325,21 @@ impl super::FileFormat for JavaClass {
         for _ in 0..method_count as usize {
             let access_flags: u16    = buf.gread_with(offset, scroll::BE)?;
             let name_idx: u16        = buf.gread_with(offset, scroll::BE)?;
-            let descriptor_idx: u16  = buf.gread_with(offset, scroll::BE)?;
-            let attribute_count: u16 = buf.gread_with(offset, scroll::BE)?;
-            let mut attributes       = Vec::with_capacity(attribute_count as usize);
-            for _ in 0..attribute_count as usize {
-                let attribute_name_idx: u16 = buf.gread_with(offset, scroll::BE)?;
-                let attribute_len: u32      = buf.gread_with(offset, scroll::BE)?;
-                let info                    = buf[*offset..*offset + attribute_len as usize].to_vec();
-                *offset += attribute_len as usize;
-                attributes.push(Attribute_info {attribute_name_idx, attribute_len, info});
+            let desc_idx: u16  = buf.gread_with(offset, scroll::BE)?;
+            let attr_count: u16 = buf.gread_with(offset, scroll::BE)?;
+            let mut attributes       = Vec::with_capacity(attr_count as usize);
+            for _ in 0..attr_count as usize {
+                let attr_name_idx: u16 = buf.gread_with(offset, scroll::BE)?;
+                let attr_len: u32      = buf.gread_with(offset, scroll::BE)?;
+                let info                    = buf[*offset..*offset + attr_len as usize].to_vec();
+                *offset += attr_len as usize;
+                attributes.push(Attribute_info {attr_name_idx, attr_len, info});
             }
             let method = Method_info {
                 access_flags,
                 name_idx,
-                descriptor_idx,
-                attribute_count,
+                desc_idx,
+                attr_count,
                 attributes,
             };
             method_tab.push(method);
@@ -309,11 +348,11 @@ impl super::FileFormat for JavaClass {
         let attribute_count: u16 = buf.gread_with(offset, scroll::BE)?;
         let mut attribute_tab = Vec::with_capacity(attribute_count as usize);
         for _ in 0..attribute_count as usize {
-            let attribute_name_idx: u16 = buf.gread_with(offset, scroll::BE)?;
-            let attribute_len: u32      = buf.gread_with(offset, scroll::BE)?;
-            let info                    = buf[*offset..*offset + attribute_len as usize].to_vec();
-            *offset += attribute_len as usize;
-            attribute_tab.push(Attribute_info {attribute_name_idx, attribute_len, info});
+            let attr_name_idx: u16 = buf.gread_with(offset, scroll::BE)?;
+            let attr_len: u32      = buf.gread_with(offset, scroll::BE)?;
+            let info                    = buf[*offset..*offset + attr_len as usize].to_vec();
+            *offset += attr_len as usize;
+            attribute_tab.push(Attribute_info {attr_name_idx, attr_len, info});
         }
 
 
@@ -351,9 +390,13 @@ impl super::FileFormat for JavaClass {
     fn print(&self) -> Result<(), Error> {
         use ansi_term::Color;
         use prettytable::Table;
+        use textwrap::fill;
 
         println!("{:#X?}", self);
 
+        //
+        // JAVA CLASS FILE
+        //
         print!("JAVA_CLASS ");
         println!("{}", Color::Blue.paint(java_version_to_str(
             self.class_header.minor_ver,
@@ -365,7 +408,9 @@ impl super::FileFormat for JavaClass {
                  self.class_header.const_pool_tab[self.class_header.super_class as usize - 1].values_to_string(&self.class_header.const_pool_tab));
         println!();
 
-
+        //
+        // CONSTANTS
+        //
         if self.class_header.const_pool_tab.len() >= 1 {
             println!("{}", Color::White.underline().paint("Constants"));
 
@@ -387,7 +432,7 @@ impl super::FileFormat for JavaClass {
                 table.add_row(row![
                     i + 1,
                     format!("{}", entry.as_ref()),
-                    entry.values_to_string(&self.class_header.const_pool_tab),
+                    fill(&entry.values_to_string(&self.class_header.const_pool_tab), self.opt.wrap_chars),
                 ]);
             }
             table.printstd();
@@ -398,6 +443,9 @@ impl super::FileFormat for JavaClass {
 
         }
 
+        //
+        // INTERFACES
+        //
         if self.class_header.interface_tab.len() >= 1 {
             println!("{}", Color::White.underline().paint("Interfaces"));
 
@@ -428,7 +476,78 @@ impl super::FileFormat for JavaClass {
             println!();
         }
 
+        //
+        // FIELDS
+        //
+        if self.class_header.field_tab.len() >= 1 {
+            println!("{}", Color::White.underline().paint("Fields"));
+
+            let mut trimmed = false;
+            let mut table = Table::new();
+            let format = prettytable::format::FormatBuilder::new()
+                .borders(' ')
+                .column_separator(' ')
+                .padding(1, 1)
+                .build();
+            table.set_format(format);
+            table.add_row(row!["Idx", "Name", "Flags", "Descriptor", "Attributes"]);
+
+            for (i, entry) in self.class_header.field_tab.iter().enumerate() {
+                if i == self.opt.trim_lines {
+                    trimmed = true;
+                    break;
+                }
+                table.add_row(row![
+                    i + 1,
+                    self.class_header.const_pool_tab[entry.name_idx as usize - 1].values_to_string(&self.class_header.const_pool_tab),
+                    access_flags_to_str(entry.access_flags),
+                    self.class_header.const_pool_tab[entry.desc_idx as usize - 1].values_to_string(&self.class_header.const_pool_tab),
+                    format!("{:X?}", entry.attributes),
+                ]);
+            }
+            table.printstd();
+            if trimmed {
+                fmt_indentln(format!("Output trimmed..."));
+            }
+            println!();
+        }
+
+        //
+        // ATTRIBUTES
+        //
+        if self.class_header.attribute_tab.len() >= 1 {
+            println!("{}", Color::White.underline().paint("Attributes"));
+
+            let mut trimmed = false;
+            let mut table = Table::new();
+            let format = prettytable::format::FormatBuilder::new()
+                .borders(' ')
+                .column_separator(' ')
+                .padding(1, 1)
+                .build();
+            table.set_format(format);
+            table.add_row(row!["Idx", "Name", "Info"]);
+
+            for (i, entry) in self.class_header.attribute_tab.iter().enumerate() {
+                if i == self.opt.trim_lines {
+                    trimmed = true;
+                    break;
+                }
+                table.add_row(row![
+                    i + 1,
+                    self.class_header.const_pool_tab[entry.attr_name_idx as usize - 1].values_to_string(&self.class_header.const_pool_tab),
+                ]);
+            }
+            table.printstd();
+            if trimmed {
+                fmt_indentln(format!("Output trimmed..."));
+            }
+            println!();
+        }
+
+
         Ok(())
+
     }
 
 }

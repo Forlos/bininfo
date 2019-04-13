@@ -34,8 +34,12 @@ pub enum Problem {
 pub struct Opt {
 
     /// Number of lines before trim
-    #[structopt(short = "t", long = "trim", default_value = "20", help = "number of lines befor trim")]
+    #[structopt(short = "t", long = "trim", default_value = "20", help = "number of lines before trim")]
     trim_lines: usize,
+
+    /// Number of chars before wrap
+    #[structopt(short = "w", long = "wrap", default_value = "80", help = "number of chars before wrap")]
+    wrap_chars: usize,
 
     /// File to print info about
     #[structopt(help = "file path")]

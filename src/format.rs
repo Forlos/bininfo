@@ -2,6 +2,7 @@ use crate::formats::png::{Prefix, Postfix};
 use failure::Error;
 use scroll::Pread;
 use prettytable::{Cell, Row, Table};
+use textwrap::fill;
 
 pub fn fmt_indent(fmt: String) {
     print!("{:>2}", "");
@@ -85,10 +86,7 @@ pub fn fmt_elf_flags(flags: u32) -> String {
 
 }
 
-pub fn fmt_elf_sym_table(symtab: &Vec<Elf_symbol_header>, symstr: &Vec<u8>, section_headers: &Vec<Elf_section_header>, sh_strtab: &Vec<u8>) -> Result<(), Error> {
-    use textwrap::{fill, termwidth};
-
-    let term_width = termwidth() / 2;
+pub fn fmt_elf_sym_table(symtab: &Vec<Elf_symbol_header>, symstr: &Vec<u8>, section_headers: &Vec<Elf_section_header>, sh_strtab: &Vec<u8>, wrap: usize) -> Result<(), Error> {
 
     let mut table = Table::new();
     let format = prettytable::format::FormatBuilder::new()
@@ -127,7 +125,7 @@ pub fn fmt_elf_sym_table(symtab: &Vec<Elf_symbol_header>, symstr: &Vec<u8>, sect
             Cell::new(&format!("{:>#16X}", header.st_value)).style_spec("Frr"),
             bind_cell,
             typ_cell,
-            Cell::new(&fill(symbol, term_width)).style_spec("Fy"),
+            Cell::new(&fill(symbol, wrap)).style_spec("Fy"),
             Cell::new(if (header.st_shndx as usize) < (section_headers.len()) {
                 sh_strtab.pread::<&str>(section_headers[header.st_shndx as usize].sh_name as usize)?
             }
@@ -144,10 +142,7 @@ pub fn fmt_elf_sym_table(symtab: &Vec<Elf_symbol_header>, symstr: &Vec<u8>, sect
 
 }
 
-pub fn fmt_elf_rel_table(rel: &Vec<Elf_rel>, dynsym: &Vec<Elf_symbol_header>, dynstr: &Vec<u8>, machine: u16) -> Result<(), Error>{
-    use textwrap::{fill, termwidth};
-
-    let term_width = termwidth() / 2;
+pub fn fmt_elf_rel_table(rel: &Vec<Elf_rel>, dynsym: &Vec<Elf_symbol_header>, dynstr: &Vec<u8>, machine: u16, wrap: usize) -> Result<(), Error>{
 
     let mut table = Table::new();
     let format = prettytable::format::FormatBuilder::new()
@@ -164,7 +159,7 @@ pub fn fmt_elf_rel_table(rel: &Vec<Elf_rel>, dynsym: &Vec<Elf_symbol_header>, dy
         table.add_row(row![
             Fr->format!("{:>#16X}", header.r_offset),
             r_to_str(header.r_info as u32 & 0xFF, machine),
-            Fy->fill(dynstr.pread::<&str>(dynsym[info].st_name as usize)?, term_width),
+            Fy->fill(dynstr.pread::<&str>(dynsym[info].st_name as usize)?, wrap),
         ]);
     }
     table.printstd();
@@ -173,11 +168,8 @@ pub fn fmt_elf_rel_table(rel: &Vec<Elf_rel>, dynsym: &Vec<Elf_symbol_header>, dy
 
 }
 
-pub fn fmt_elf_rela_table(rela: &Vec<Elf_rela>, dynsym: &Vec<Elf_symbol_header>, dynstr: &Vec<u8>, machine: u16) -> Result<(), Error>{
+pub fn fmt_elf_rela_table(rela: &Vec<Elf_rela>, dynsym: &Vec<Elf_symbol_header>, dynstr: &Vec<u8>, machine: u16, wrap: usize) -> Result<(), Error>{
     use ansi_term::Color;
-    use textwrap::{fill, termwidth};
-
-    let term_width = termwidth() / 2;
 
     let mut table = Table::new();
     let format = prettytable::format::FormatBuilder::new()
@@ -199,7 +191,7 @@ pub fn fmt_elf_rela_table(rela: &Vec<Elf_rela>, dynsym: &Vec<Elf_symbol_header>,
         table.add_row(row![
             Fr->format!("{:>#16X}", header.r_offset),
             r_to_str(header.r_info as u32 & 0xFF, machine),
-            fill(&format!("{}+{}", name, Color::Red.paint(format!("{}", header.r_addend))), term_width),
+            fill(&format!("{}+{}", name, Color::Red.paint(format!("{}", header.r_addend))), wrap),
         ]);
     }
     table.printstd();
