@@ -28,7 +28,7 @@ struct Class_header {
     method_count:     u16,
     method_tab:       Vec<Method_info>,
     attribute_count:  u16,
-    attribute_tab:    Vec<Attribute_info>,
+    attribute_tab:    Vec<Attributes>,
 }
 
 #[derive(Debug, AsRefStr)]
@@ -115,7 +115,7 @@ struct Field_info {
     name_idx:     u16,
     desc_idx:     u16,
     attr_count:   u16,
-    attributes:   Vec<Attribute_info>,
+    attributes:   Vec<Attributes>,
 }
 
 #[derive(Debug)]
@@ -124,17 +124,17 @@ struct Method_info {
     name_idx:     u16,
     desc_idx:     u16,
     attr_count:   u16,
-    attributes:   Vec<Attribute_info>,
+    attributes:   Vec<Attributes>,
 }
 
-#[derive(Debug)]
-struct Attribute_info {
-    attr_name_idx: u16,
-    attr_len:      u32,
-    info:          Vec<u8>,
-}
+// #[derive(Debug)]
+// struct Attribute_info {
+//     attr_name_idx: u16,
+//     attr_len:      u32,
+//     info:          Vec<u8>,
+// }
 
-#[derive(Debug)]
+#[derive(Debug, AsRefStr)]
 enum Attributes {
     ConstantValue {
         name_idx:  u16,
@@ -151,13 +151,13 @@ enum Attributes {
         ex_tab_len:  u16,
         ex_tab:      Vec<Exception>,
         attr_count:  u16,
-        attributes:  Vec<Attribute_info>,
+        attributes:  Vec<Attributes>,
     },
     StackMapTable {
         name_idx:  u16,
         attr_len:  u32,
         n_entries: u16,
-        entries:   Vec<u8>
+        entries:   Vec<StackMapFrame>
     },
     Exceptions {
         name_idx:   u16,
@@ -269,7 +269,7 @@ enum Attributes {
         name_idx:     u16,
         attr_len:     u32,
         params_count: u8,
-        params: Vec<Parameter>,
+        params:       Vec<Parameter>,
     },
     Module {
         name_idx:     u16,
@@ -277,8 +277,8 @@ enum Attributes {
         mod_name_idx: u16,
         mod_flags:    u16,
         mod_ver_idx:  u16,
-        required_cnt: u16,
-        required:     Vec<Require>,
+        requires_cnt: u16,
+        requires:     Vec<Require>,
         exports_cnt:  u16,
         exports:      Vec<Export>,
         opens_cnt:    u16,
@@ -312,7 +312,548 @@ enum Attributes {
     }
 }
 
+impl Attributes {
+
+    pub fn parse(buf: &[u8], offset: &mut usize, const_tab: &Vec<Constants>) -> Result<Attributes, Error> {
+        use Attributes::*;
+
+        let name_idx = buf.gread_with::<u16>(offset, scroll::BE)?;
+        let attr_len = buf.gread_with::<u32>(offset, scroll::BE)?;
+        let name = const_tab[name_idx as usize - 1].values_to_string(const_tab);
+        match name.as_str() {
+
+            "ConstantValue" => Ok(ConstantValue{name_idx,attr_len,
+                                                const_idx: buf.gread_with(offset, scroll::BE)?}),
+            "Code" => {
+
+                let max_stack   = buf.gread_with::<u16>(offset, scroll::BE)?;
+                let max_locals  = buf.gread_with::<u16>(offset, scroll::BE)?;
+                let code_length = buf.gread_with::<u32>(offset, scroll::BE)?;
+                // Code is pretty useless there since we parse headers
+                let code        = Vec::new();
+                *offset += code_length as usize;
+
+                let ex_tab_len = buf.gread_with::<u16>(offset, scroll::BE)?;
+                let mut ex_tab = Vec::with_capacity(ex_tab_len as usize);
+                for _ in 0..ex_tab_len as usize {
+                    ex_tab.push(buf.gread_with(offset, scroll::BE)?);
+                }
+                let attr_count     = buf.gread_with::<u16>(offset, scroll::BE)?;
+                let mut attributes = Vec::with_capacity(attr_count as usize);
+                for _ in 0..attr_count as usize {
+                    attributes.push(Attributes::parse(buf, offset, const_tab)?);
+                }
+
+                Ok(Code{name_idx,attr_len,
+                        max_stack,
+                        max_locals,
+                        code_length,
+                        code,
+                        ex_tab_len,
+                        ex_tab,
+                        attr_count,
+                        attributes,
+                })
+            },
+            "StackMapTable" => {
+                use StackMapFrame::*;
+
+                let n_entries = buf.gread_with::<u16>(offset, scroll::BE)?;
+                let mut entries = Vec::with_capacity(n_entries as usize);
+                for _ in 0..n_entries as usize {
+                    let frame_type = buf.gread_with::<u8>(offset, scroll::BE)?;
+                    match frame_type {
+                        // Tags in the range [128-246] are reserved for future use.
+                        0...63 => {
+                            entries.push(SameFrame(frame_type));
+                        },
+                        64...127 => {
+                            let tag = buf.gread_with::<u8>(offset, scroll::BE)?;
+                            let stack = VerificationTypeInfo::parse(tag, buf, offset)?;
+                            entries.push(SameLocals1StackItemFrame(frame_type, stack));
+                        },
+                        247 => {
+                            let tag = buf.gread_with::<u8>(offset, scroll::BE)?;
+                            let offset_delta = buf.gread_with::<u16>(offset, scroll::BE)?;
+                            let stack = VerificationTypeInfo::parse(tag, buf, offset)?;
+                            entries.push(SameLocals1StackItemFrameExt(frame_type, offset_delta, stack));
+                        },
+                        248...250 => {
+                            let offset_delta = buf.gread_with::<u16>(offset, scroll::BE)?;
+                            entries.push(ChopFrame(frame_type, offset_delta));
+                        },
+                        251 => {
+                            let offset_delta = buf.gread_with::<u16>(offset, scroll::BE)?;
+                            entries.push(SameFrameExt(frame_type, offset_delta));
+                        },
+                        252...254 => {
+                            let offset_delta = buf.gread_with::<u16>(offset, scroll::BE)?;
+                            let mut locals = Vec::with_capacity(frame_type as usize - 251);
+                            for _ in 0..frame_type as usize - 251 {
+                                let tag = buf.gread_with::<u8>(offset, scroll::BE)?;
+                                locals.push(VerificationTypeInfo::parse(tag, buf, offset)?);
+                            }
+                            entries.push(AppendFrame(frame_type, offset_delta, locals));
+                        },
+                        255 => {
+                            let offset_delta  = buf.gread_with::<u16>(offset, scroll::BE)?;
+                            let n_locals      = buf.gread_with::<u16>(offset, scroll::BE)?;
+                            let mut locals    = Vec::with_capacity(n_locals as usize);
+                            for _ in 0..n_locals {
+                                let tag = buf.gread_with::<u8>(offset, scroll::BE)?;
+                                locals.push(VerificationTypeInfo::parse(tag, buf, offset)?);
+                            }
+                            let n_stack_items = buf.gread_with::<u16>(offset, scroll::BE)?;
+                            let mut stack_items = Vec::with_capacity(n_stack_items as usize);
+                            for _ in 0..n_stack_items {
+                                let tag = buf.gread_with::<u8>(offset, scroll::BE)?;
+                                stack_items.push(VerificationTypeInfo::parse(tag, buf, offset)?);
+                            }
+                            entries.push(FullFrame(frame_type, offset_delta, n_locals, locals, n_stack_items, stack_items));
+                        },
+                        _ => return Err(Error::from(Problem::Msg(format!("Invalid/Unsupported stack map frame")))),
+                    }
+                }
+
+                Ok(StackMapTable{name_idx,attr_len,
+                                 n_entries,
+                                 entries,
+                })
+
+            },
+            "Exceptions" => {
+
+                let n_of_ex        = buf.gread_with::<u16>(offset, scroll::BE)?;
+                let mut ex_idx_tab = Vec::with_capacity(n_of_ex as usize);
+                for _ in 0..n_of_ex {
+                    ex_idx_tab.push(buf.gread_with(offset, scroll::BE)?)
+                }
+
+                Ok(Exceptions{name_idx,attr_len,
+                              n_of_ex,
+                              ex_idx_tab,
+                })
+            },
+            "InnerClasses" => {
+
+                let n_of_classes = buf.gread_with::<u16>(offset, scroll::BE)?;
+                let mut classes  = Vec::with_capacity(n_of_classes as usize);
+                for _ in 0..n_of_classes {
+                    classes.push(buf.gread_with(offset, scroll::BE)?)
+                }
+
+                Ok(InnerClasses{name_idx,attr_len,
+                                n_of_classes,
+                                classes,
+                })
+            },
+            "EnclosingMethod" => {
+
+                let class_idx  = buf.gread_with::<u16>(offset, scroll::BE)?;
+                let method_idx = buf.gread_with::<u16>(offset, scroll::BE)?;
+
+                Ok(EnclosingMethod{name_idx,attr_len,
+                                   class_idx,
+                                   method_idx,
+                })
+            },
+            "Synthetic" => {
+                Ok(Synthetic{name_idx,attr_len})
+            },
+            "Signature" => {
+
+                let sig_idx = buf.gread_with::<u16>(offset, scroll::BE)?;
+
+                Ok(Signature{name_idx,attr_len,
+                             sig_idx,
+                })
+            },
+            "SourceFile" => {
+
+                let source_idx = buf.gread_with::<u16>(offset, scroll::BE)?;
+
+                Ok(SourceFile{name_idx,attr_len,
+                              source_idx,
+                })
+            },
+            "SourceDebugExtension" => {
+
+                let debug_ext = buf[*offset..*offset + attr_len as usize].to_vec();
+
+                Ok(SourceDebugExtension{name_idx,attr_len,
+                                        debug_ext,
+                })
+            },
+            "LineNumberTable" => {
+
+                let line_num_tab_len = buf.gread_with::<u16>(offset, scroll::BE)?;
+                let mut line_num_tab = Vec::with_capacity(line_num_tab_len as usize);
+                for _ in 0..line_num_tab_len {
+                    line_num_tab.push(buf.gread_with(offset, scroll::BE)?);
+                }
+
+                Ok(LineNumberTable{name_idx,attr_len,
+                                   line_num_tab_len,
+                                   line_num_tab,
+                })
+            },
+            "LocalVariableTable" => {
+
+                let local_var_tab_len = buf.gread_with::<u16>(offset, scroll::BE)?;
+                let mut local_var_tab = Vec::with_capacity(local_var_tab_len as usize);
+                for _ in 0..local_var_tab_len {
+                    local_var_tab.push(buf.gread_with(offset, scroll::BE)?);
+                }
+
+                Ok(LocalVariableTable{name_idx,attr_len,
+                                      local_var_tab_len,
+                                      local_var_tab,
+                })
+            },
+            "LocalVariableTypeTable" => {
+
+                let local_var_type_tab_len = buf.gread_with::<u16>(offset, scroll::BE)?;
+                let mut local_var_type_tab = Vec::with_capacity(local_var_type_tab_len as usize);
+                for _ in 0..local_var_type_tab_len {
+                    local_var_type_tab.push(buf.gread_with(offset, scroll::BE)?);
+                }
+
+                Ok(LocalVariableTypeTable{name_idx,attr_len,
+                                          local_var_type_tab_len,
+                                          local_var_type_tab,
+                })
+            },
+            "Deprecated" => {
+                Ok(Deprecated{name_idx,attr_len})
+            },
+            "RuntimeVisibleAnnotations" => {
+
+                let num_anno = buf.gread_with::<u16>(offset, scroll::BE)?;
+                let mut anno = Vec::with_capacity(num_anno as usize);
+                for _ in 0..num_anno {
+                    anno.push(Annotation::parse(buf, offset)?);
+                }
+
+                Ok(RuntimeVisibleAnnotations{name_idx,attr_len,
+                                             num_anno,
+                                             anno,
+                })
+            },
+            "RuntimeInvisibleAnnotations" => {
+
+                let num_anno = buf.gread_with::<u16>(offset, scroll::BE)?;
+                let mut anno = Vec::with_capacity(num_anno as usize);
+                for _ in 0..num_anno {
+                    anno.push(Annotation::parse(buf, offset)?);
+                }
+
+                Ok(RuntimeInvisibleAnnotations{name_idx,attr_len,
+                                               num_anno,
+                                               anno,
+                })
+            },
+            "RuntimeVisibleParameterAnnotations" => {
+
+                let num_params     = buf.gread_with::<u8>(offset, scroll::BE)?;
+                let mut param_anno = Vec::with_capacity(num_params as usize);
+                for _ in 0..num_params {
+                    let num_anno = buf.gread_with::<u16>(offset, scroll::BE)?;
+                    let mut anno = Vec::with_capacity(num_anno as usize);
+                    for _ in 0..num_anno {
+                        anno.push(Annotation::parse(buf, offset)?);
+                    }
+                    let param = Parameter_annotations {
+                        num_anno,
+                        anno,
+                    };
+                    param_anno.push(param);
+                }
+
+                Ok(RuntimeVisibleParameterAnnotations{name_idx,attr_len,
+                                                      num_params,
+                                                      param_anno,
+                })
+            },
+            "RuntimeInvisibleParameterAnnotations" => {
+
+                let num_params     = buf.gread_with::<u8>(offset, scroll::BE)?;
+                let mut param_anno = Vec::with_capacity(num_params as usize);
+                for _ in 0..num_params {
+                    let num_anno = buf.gread_with::<u16>(offset, scroll::BE)?;
+                    let mut anno = Vec::with_capacity(num_anno as usize);
+                    for _ in 0..num_anno {
+                        anno.push(Annotation::parse(buf, offset)?);
+                    }
+                    let param = Parameter_annotations {
+                        num_anno,
+                        anno,
+                    };
+                    param_anno.push(param);
+                }
+
+                Ok(RuntimeInvisibleParameterAnnotations{name_idx,attr_len,
+                                                        num_params,
+                                                        param_anno,
+                })
+            },
+            "RuntimeVisibleTypeAnnotations" => {
+
+                let num_anno = buf.gread_with::<u16>(offset, scroll::BE)?;
+                let mut anno = Vec::with_capacity(num_anno as usize);
+                for _ in 0..num_anno {
+                    let type_anno = Type_annotation::parse(buf, offset)?;
+                    anno.push(type_anno);
+                }
+
+                Ok(RuntimeVisibleTypeAnnotations{name_idx,attr_len,
+                                                 num_anno,
+                                                 anno,
+                })
+            },
+            "RuntimeInvisibleTypeAnnotations" => {
+
+                let num_anno = buf.gread_with::<u16>(offset, scroll::BE)?;
+                let mut anno = Vec::with_capacity(num_anno as usize);
+                for _ in 0..num_anno {
+                    let type_anno = Type_annotation::parse(buf, offset)?;
+                    anno.push(type_anno);
+                }
+
+                Ok(RuntimeInvisibleTypeAnnotations{name_idx,attr_len,
+                                                   num_anno,
+                                                   anno,
+                })
+            },
+            "AnnotationDefault" => {
+
+                let tag = buf.gread_with(offset, scroll::BE)?;
+                let value = Value::parse(tag, buf, offset)?;
+                let default_value = Element_value {
+                    tag,
+                    value,
+                };
+
+                Ok(AnnotationDefault{name_idx,attr_len,
+                                     default_value,
+                })
+            },
+            "BootstrapMethods" => {
+
+                let n_bootstrap_methods   = buf.gread_with::<u16>(offset, scroll::BE)?;
+                let mut bootstrap_methods = Vec::with_capacity(n_bootstrap_methods as usize);
+                for _ in 0..n_bootstrap_methods {
+                    let bootstrap_method_ref = buf.gread_with::<u16>(offset, scroll::BE)?;
+                    let n_bootstrap_args     = buf.gread_with::<u16>(offset, scroll::BE)?;
+                    let mut bootstrap_args   = Vec::with_capacity(n_bootstrap_args as usize);
+                    for _ in 0..n_bootstrap_args {
+                        bootstrap_args.push(buf.gread_with::<u16>(offset, scroll::BE)?);
+                    }
+                    bootstrap_methods.push(Bootstrap_method {bootstrap_method_ref, n_bootstrap_args, bootstrap_args});
+                }
+
+                Ok(BootstrapMethods{name_idx,attr_len,
+                                    n_bootstrap_methods,
+                                    bootstrap_methods,
+                })
+            },
+            "MethodParameters" => {
+
+                let params_count = buf.gread_with::<u8>(offset, scroll::BE)?;
+                let mut params   = Vec::with_capacity(params_count as usize);
+                for _ in 0..params_count {
+                    params.push(buf.gread_with(offset, scroll::BE)?);
+                }
+
+                Ok(MethodParameters{name_idx,attr_len,
+                                    params_count,
+                                    params,
+                })
+            },
+            "Module" => {
+
+                let mod_name_idx = buf.gread_with::<u16>(offset, scroll::BE)?;
+                let mod_flags    = buf.gread_with::<u16>(offset, scroll::BE)?;
+                let mod_ver_idx  = buf.gread_with::<u16>(offset, scroll::BE)?;
+
+                let requires_cnt = buf.gread_with::<u16>(offset, scroll::BE)?;
+                let mut requires = Vec::with_capacity(requires_cnt as usize);
+                for _ in 0..requires_cnt {
+                    requires.push(buf.gread_with(offset, scroll::BE)?);
+                }
+
+                let exports_cnt  = buf.gread_with::<u16>(offset, scroll::BE)?;
+                let mut exports  = Vec::with_capacity(exports_cnt as usize);
+                for _ in 0..exports_cnt {
+                    let idx        = buf.gread_with::<u16>(offset, scroll::BE)?;
+                    let flags      = buf.gread_with::<u16>(offset, scroll::BE)?;
+                    let to_cnt     = buf.gread_with::<u16>(offset, scroll::BE)?;
+                    let mut to_idx = Vec::with_capacity(to_cnt as usize);
+                    for _ in 0..to_cnt {
+                        to_idx.push(buf.gread_with::<u16>(offset, scroll::BE)?);
+                    }
+                    exports.push(Export {
+                        idx,
+                        flags,
+                        to_cnt,
+                        to_idx,
+                    });
+                }
+
+                let opens_cnt    = buf.gread_with::<u16>(offset, scroll::BE)?;
+                let mut opens    = Vec::with_capacity(opens_cnt as usize);
+                for _ in 0..opens_cnt {
+                    let idx        = buf.gread_with::<u16>(offset, scroll::BE)?;
+                    let flags      = buf.gread_with::<u16>(offset, scroll::BE)?;
+                    let to_cnt     = buf.gread_with::<u16>(offset, scroll::BE)?;
+                    let mut to_idx = Vec::with_capacity(to_cnt as usize);
+                    for _ in 0..to_cnt {
+                        to_idx.push(buf.gread_with::<u16>(offset, scroll::BE)?);
+                    }
+                    opens.push(Open {
+                        idx,
+                        flags,
+                        to_cnt,
+                        to_idx,
+                    });
+                }
+
+                let uses_cnt     = buf.gread_with::<u16>(offset, scroll::BE)?;
+                let mut uses_idx = Vec::with_capacity(uses_cnt as usize);
+                for _ in 0..uses_cnt {
+                    uses_idx.push(buf.gread_with::<u16>(offset, scroll::BE)?);
+                }
+
+                let provides_cnt = buf.gread_with::<u16>(offset, scroll::BE)?;
+                let mut provides = Vec::with_capacity(provides_cnt as usize);
+                for _ in 0..provides_cnt {
+                    let idx          = buf.gread_with::<u16>(offset, scroll::BE)?;
+                    let with_cnt     = buf.gread_with::<u16>(offset, scroll::BE)?;
+                    let mut with_idx = Vec::with_capacity(with_cnt as usize);
+                    for _ in 0..with_cnt {
+                        with_idx.push(buf.gread_with::<u16>(offset, scroll::BE)?);
+                    }
+                    provides.push(Provide {
+                        idx,
+                        with_cnt,
+                        with_idx,
+                    });
+                }
+
+                Ok(Module{name_idx,attr_len,
+                          mod_name_idx,
+                          mod_flags,
+                          mod_ver_idx,
+                          requires_cnt,
+                          requires,
+                          exports_cnt,
+                          exports,
+                          opens_cnt,
+                          opens,
+                          uses_cnt,
+                          uses_idx,
+                          provides_cnt,
+                          provides,
+                })
+            },
+            "ModulePackages" => {
+
+                let package_cnt     = buf.gread_with::<u16>(offset, scroll::BE)?;
+                let mut package_idx = Vec::with_capacity(package_cnt as usize);
+                for _ in 0..package_cnt {
+                    package_idx.push(buf.gread_with::<u16>(offset, scroll::BE)?);
+                }
+
+                Ok(ModulePackages{name_idx,attr_len,
+                                  package_cnt,
+                                  package_idx,
+                })
+            },
+            "ModuleMainClass" => {
+
+                let main_class_idx = buf.gread_with(offset, scroll::BE)?;
+
+                Ok(ModuleMainClass{name_idx,attr_len,
+                                   main_class_idx,
+                })
+            },
+            "NestHost" => {
+
+                let host_class_idx = buf.gread_with::<u16>(offset, scroll::BE)?;
+
+                Ok(NestHost{name_idx,attr_len,
+                            host_class_idx,
+                })
+            }
+            "NestMembers" => {
+
+                let n_of_classes = buf.gread_with::<u16>(offset, scroll::BE)?;
+                let mut classes  = Vec::with_capacity(n_of_classes as usize);
+                for _ in 0..n_of_classes {
+                    classes.push(buf.gread_with::<u16>(offset, scroll::BE)?);
+                }
+
+                Ok(NestMembers{name_idx,attr_len,
+                               n_of_classes,
+                               classes,
+                })
+            }
+
+
+            _ => return Err(Error::from(Problem::Msg(format!("Invalid/Unsupported attribute: {}", name)))),
+
+        }
+
+    }
+
+}
+
 #[derive(Debug)]
+enum StackMapFrame {
+    SameFrame(u8),
+    SameLocals1StackItemFrame(u8, VerificationTypeInfo),
+    SameLocals1StackItemFrameExt(u8, u16, VerificationTypeInfo),
+    ChopFrame(u8, u16),
+    SameFrameExt(u8, u16),
+    AppendFrame(u8, u16, Vec<VerificationTypeInfo>),
+    FullFrame(u8, u16, u16, Vec<VerificationTypeInfo>, u16, Vec<VerificationTypeInfo>),
+}
+
+#[derive(Debug)]
+enum VerificationTypeInfo {
+    TopVariable(u8),
+    IntegerVariable(u8),
+    FloatVariable(u8),
+    LongVariable(u8),
+    DoubleVariable(u8),
+    NullVariable(u8),
+    UninitializedThisVariable(u8),
+    ObjectVariable(u8, u16),
+    UninitializedVariable(u8, u16),
+}
+
+impl VerificationTypeInfo {
+
+    pub fn parse(tag: u8, buf: &[u8], offset: &mut usize) -> Result<Self, Error> {
+        use VerificationTypeInfo::*;
+
+        match tag {
+            0 => Ok(TopVariable(tag)),
+            1 => Ok(IntegerVariable(tag)),
+            2 => Ok(FloatVariable(tag)),
+            3 => Ok(DoubleVariable(tag)),
+            4 => Ok(LongVariable(tag)),
+            5 => Ok(NullVariable(tag)),
+            6 => Ok(UninitializedThisVariable(tag)),
+            7 => Ok(ObjectVariable(tag, buf.gread_with(offset, scroll::BE)?)),
+            8 => Ok(UninitializedVariable(tag, buf.gread_with(offset, scroll::BE)?)),
+            _ => Err(Error::from(Problem::Msg(format!("Invalid tag for VerificationTypeInfo")))),
+        }
+
+    }
+
+}
+
+#[derive(Debug, Pread)]
 struct Exception {
     start_pc:   u16,
     end_pc:     u16,
@@ -320,7 +861,7 @@ struct Exception {
     catch_type: u16,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Pread)]
 struct Inner_class {
     inner_class_info_idx:     u16,
     outer_class_info_idx:     u16,
@@ -328,13 +869,13 @@ struct Inner_class {
     inner_class_access_flags: u16,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Pread)]
 struct Line_number {
     start_pc: u16,
     line_num: u16,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Pread)]
 struct Local_variable {
     start_pc: u16,
     len:      u16,
@@ -343,7 +884,7 @@ struct Local_variable {
     idx:      u16,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Pread)]
 struct Local_variable_type {
     start_pc: u16,
     len:      u16,
@@ -359,6 +900,25 @@ struct Annotation {
     ele_val_pairs:   Vec<Element_value>,
 }
 
+impl Annotation {
+
+    pub fn parse(buf: &[u8], offset: &mut usize) -> Result<Self, Error> {
+        let type_idx = buf.gread_with::<u16>(offset, scroll::BE)?;
+        let n_ele_val_pairs = buf.gread_with::<u16>(offset, scroll::BE)?;
+        let mut ele_val_pairs = Vec::with_capacity(n_ele_val_pairs as usize);
+        for _ in 0..n_ele_val_pairs {
+            let tag = buf.gread_with::<u8>(offset, scroll::BE)?;
+            ele_val_pairs.push(Element_value {tag, value: Value::parse(tag, buf, offset)?})
+        }
+        Ok(Annotation {
+            type_idx,
+            n_ele_val_pairs,
+            ele_val_pairs,
+        })
+    }
+
+}
+
 #[derive(Debug)]
 enum Value {
     ConstValueIdx(u16),
@@ -366,6 +926,36 @@ enum Value {
     ClassInfoIdx(u16),
     AnnotationValue(Annotation),
     ArrayValue(u16, Vec<Element_value>),
+}
+
+impl Value {
+
+    pub fn parse(tag: u8, buf: &[u8], offset: &mut usize) -> Result<Self, Error> {
+        use Value::*;
+
+        match tag {
+
+            b'B' | b'C' | b'D' | b'F' | b'I' | b'J' | b'S' | b'Z' | b's' => Ok(ConstValueIdx(buf.gread_with(offset, scroll::BE)?)),
+            b'e' => Ok(EnumConstValue(buf.gread_with(offset, scroll::BE)?, buf.gread_with(offset, scroll::BE)?)),
+            b'c' => Ok(ClassInfoIdx(buf.gread_with(offset, scroll::BE)?)),
+            b'@' => {
+                Ok(AnnotationValue(Annotation::parse(buf, offset)?))
+            },
+            b'[' => {
+                let num_values = buf.gread_with::<u16>(offset, scroll::BE)?;
+                let mut values = Vec::with_capacity(num_values as usize);
+                for _ in 0..num_values {
+                    let tag = buf.gread_with::<u8>(offset, scroll::BE)?;
+                    values.push(Element_value { tag, value: Value::parse(tag, buf, offset)? })
+                }
+                Ok(ArrayValue(num_values, values))
+            },
+            _ => Err(Error::from(Problem::Msg(format!("Invalid/unsupported tag for Value: {}", tag))))
+
+        }
+
+    }
+
 }
 
 #[derive(Debug)]
@@ -382,12 +972,44 @@ struct Parameter_annotations {
 
 #[derive(Debug)]
 struct Type_annotation {
-    target_type: u8,
-    target_info: Vec<TargetInfo>,
-    target_path: Type_path,
-    type_idx: u16,
+    target_type:     u8,
+    target_info:     TargetInfo,
+    target_path:     Type_path,
+    type_idx:        u16,
     n_ele_var_pairs: u16,
-    ele_var_pairs: Vec<Name_element_value>,
+    ele_var_pairs:   Vec<Name_element_value>,
+}
+
+impl Type_annotation {
+
+    pub fn parse(buf: &[u8], offset: &mut usize) -> Result<Self, Error> {
+        let target_type = buf.gread_with::<u8>(offset, scroll::BE)?;
+        let target_info = TargetInfo::parse(target_type, buf, offset)?;
+        let path_len    = buf.gread_with::<u8>(offset, scroll::BE)?;
+        let mut path    = Vec::with_capacity(path_len as usize);
+        for _ in 0..path_len {
+            path.push(buf.gread_with(offset, scroll::BE)?);
+        }
+        let target_path       = Type_path {path_len, path};
+        let type_idx          = buf.gread_with::<u16>(offset, scroll::BE)?;
+        let n_ele_var_pairs   = buf.gread_with::<u16>(offset, scroll::BE)?;
+        let mut ele_var_pairs = Vec::with_capacity(n_ele_var_pairs as usize);
+        for _ in 0..n_ele_var_pairs {
+            let name_idx = buf.gread_with::<u16>(offset, scroll::BE)?;
+            let tag = buf.gread_with::<u8>(offset, scroll::BE)?;
+            ele_var_pairs.push(Name_element_value{name_idx , value: Element_value { tag, value: Value::parse(tag, buf, offset)? }});
+        }
+
+        Ok(Type_annotation {
+            target_type,
+            target_info,
+            target_path,
+            type_idx,
+            n_ele_var_pairs,
+            ele_var_pairs,
+        })
+    }
+
 }
 
 #[derive(Debug)]
@@ -396,7 +1018,7 @@ enum TargetInfo {
     Supertype(u16),
     TypeParameterBound(u8,u8),
     Empty,
-    FormatParameter(u8),
+    FormalParameter(u8),
     Throws(u16),
     LocalVar(u16, Vec<Local_var>),
     Catch(u16),
@@ -404,7 +1026,39 @@ enum TargetInfo {
     TypeArgument(u16,u8),
 }
 
-#[derive(Debug)]
+impl TargetInfo {
+
+    pub fn parse(target_type: u8, buf: &[u8], offset: &mut usize) -> Result<Self, Error> {
+        use TargetInfo::*;
+
+        match target_type {
+
+            0x00 | 0x01 => Ok(TypeParameter(buf.gread_with(offset, scroll::BE)?)),
+            0x10 => Ok(Supertype(buf.gread_with(offset, scroll::BE)?)),
+            0x11 | 0x12 => Ok(TypeParameterBound(buf.gread_with(offset, scroll::BE)?, buf.gread_with(offset, scroll::BE)?)),
+            0x13 | 0x14 | 0x15 => Ok(Empty),
+            0x16 => Ok(FormalParameter(buf.gread_with(offset, scroll::BE)?)),
+            0x17 => Ok(Throws(buf.gread_with(offset, scroll::BE)?)),
+            0x40 | 0x41 => {
+                let tab_len = buf.gread_with::<u16>(offset, scroll::BE)?;
+                let mut tab = Vec::with_capacity(tab_len as usize);
+                for _ in 0..tab_len {
+                    tab.push(buf.gread_with(offset, scroll::BE)?);
+                }
+                Ok(LocalVar(tab_len, tab))
+            },
+            0x42 => Ok(Catch(buf.gread_with(offset, scroll::BE)?)),
+            0x43...0x46 => Ok(Offset(buf.gread_with(offset, scroll::BE)?)),
+            0x48...0x4B => Ok(TypeArgument(buf.gread_with(offset, scroll::BE)?, buf.gread_with(offset, scroll::BE)?)),
+            _ => Err(Error::from(Problem::Msg(format!("Invalid/unsupported target type for target info: {}", target_type)))),
+
+        }
+
+    }
+
+}
+
+#[derive(Debug, Pread)]
 struct Local_var {
     start_pc: u16,
     len:      u16,
@@ -417,7 +1071,7 @@ struct Type_path {
     path:     Vec<Path>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Pread)]
 struct Path {
     kind: u8,
     idx:  u8,
@@ -436,14 +1090,14 @@ struct Bootstrap_method {
     bootstrap_args: Vec<u16>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Pread)]
 struct Parameter {
     name_idx: u16,
     access_flags: u16,
 }
 
 
-#[derive(Debug)]
+#[derive(Debug, Pread)]
 struct Require {
     idx:     u16,
     flags:   u16,
@@ -608,11 +1262,12 @@ impl super::FileFormat for JavaClass {
             let attr_count: u16 = buf.gread_with(offset, scroll::BE)?;
             let mut attributes       = Vec::with_capacity(attr_count as usize);
             for _ in 0..attr_count as usize {
-                let attr_name_idx: u16 = buf.gread_with(offset, scroll::BE)?;
-                let attr_len: u32      = buf.gread_with(offset, scroll::BE)?;
-                let info                    = buf[*offset..*offset + attr_len as usize].to_vec();
-                *offset += attr_len as usize;
-                attributes.push(Attribute_info {attr_name_idx, attr_len, info});
+                // let attr_name_idx: u16 = buf.gread_with(offset, scroll::BE)?;
+                // let attr_len: u32      = buf.gread_with(offset, scroll::BE)?;
+                // let info                    = buf[*offset..*offset + attr_len as usize].to_vec();
+                // *offset += attr_len as usize;
+                // attributes.push(Attribute_info {attr_name_idx, attr_len, info});
+                attributes.push(Attributes::parse(buf, offset, &const_pool_tab)?);
             }
             let field = Field_info {
                 access_flags,
@@ -633,11 +1288,12 @@ impl super::FileFormat for JavaClass {
             let attr_count: u16 = buf.gread_with(offset, scroll::BE)?;
             let mut attributes       = Vec::with_capacity(attr_count as usize);
             for _ in 0..attr_count as usize {
-                let attr_name_idx: u16 = buf.gread_with(offset, scroll::BE)?;
-                let attr_len: u32      = buf.gread_with(offset, scroll::BE)?;
-                let info                    = buf[*offset..*offset + attr_len as usize].to_vec();
-                *offset += attr_len as usize;
-                attributes.push(Attribute_info {attr_name_idx, attr_len, info});
+                // let attr_name_idx: u16 = buf.gread_with(offset, scroll::BE)?;
+                // let attr_len: u32      = buf.gread_with(offset, scroll::BE)?;
+                // let info                    = buf[*offset..*offset + attr_len as usize].to_vec();
+                // *offset += attr_len as usize;
+                // attributes.push(Attribute_info {attr_name_idx, attr_len, info});
+                attributes.push(Attributes::parse(buf, offset, &const_pool_tab)?);
             }
             let method = Method_info {
                 access_flags,
@@ -652,11 +1308,12 @@ impl super::FileFormat for JavaClass {
         let attribute_count: u16 = buf.gread_with(offset, scroll::BE)?;
         let mut attribute_tab = Vec::with_capacity(attribute_count as usize);
         for _ in 0..attribute_count as usize {
-            let attr_name_idx: u16 = buf.gread_with(offset, scroll::BE)?;
-            let attr_len: u32      = buf.gread_with(offset, scroll::BE)?;
-            let info                    = buf[*offset..*offset + attr_len as usize].to_vec();
-            *offset += attr_len as usize;
-            attribute_tab.push(Attribute_info {attr_name_idx, attr_len, info});
+            // let attr_name_idx: u16 = buf.gread_with(offset, scroll::BE)?;
+            // let attr_len: u32      = buf.gread_with(offset, scroll::BE)?;
+            // let info                    = buf[*offset..*offset + attr_len as usize].to_vec();
+            // *offset += attr_len as usize;
+            // attribute_tab.push(Attribute_info {attr_name_idx, attr_len, info});
+            attribute_tab.push(Attributes::parse(buf, offset, &const_pool_tab)?);
         }
 
 
@@ -839,7 +1496,8 @@ impl super::FileFormat for JavaClass {
                 }
                 table.add_row(row![
                     i + 1,
-                    self.class_header.const_pool_tab[entry.attr_name_idx as usize - 1].values_to_string(&self.class_header.const_pool_tab),
+                    entry.as_ref(),
+                    // self.class_header.const_pool_tab[entry.attr_name_idx as usize - 1].values_to_string(&self.class_header.const_pool_tab),
                 ]);
             }
             table.printstd();
