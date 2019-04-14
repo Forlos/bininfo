@@ -65,43 +65,43 @@ impl Constants {
             Long(long)                                             => format!("{}", Color::Fixed(120).paint(format!("{}", long))),
             Double(double)                                         => format!("{}", Color::Fixed(120).paint(format!("{}", double))),
             ClassRef{name_idx}                                     => format!("{}({})",
-                                                                              Color::Yellow.paint(const_tab[*name_idx as usize - 1].values_to_string(const_tab)),
+                                                                              Color::Yellow.paint(const_tab[*name_idx as usize].values_to_string(const_tab)),
                                                                               Color::Red.paint(format!("{}", name_idx))),
             StringRef{string_idx}                                  => format!("\"{}\"({})",
-                                                                              Color::Purple.paint(const_tab[*string_idx as usize - 1].values_to_string(const_tab)),
+                                                                              Color::Purple.paint(const_tab[*string_idx as usize].values_to_string(const_tab)),
                                                                               Color::Red.paint(format!("{}", string_idx))),
             FieldRef{class_idx, nametype_idx}                      => format!("{}, {}",
-                                                                              const_tab[*class_idx as usize - 1].values_to_string(const_tab),
-                                                                              const_tab[*nametype_idx as usize - 1].values_to_string(const_tab)),
+                                                                              const_tab[*class_idx as usize].values_to_string(const_tab),
+                                                                              const_tab[*nametype_idx as usize].values_to_string(const_tab)),
             MethodRef{class_idx, nametype_idx}                     => format!("{}, {}",
-                                                                              const_tab[*class_idx as usize - 1].values_to_string(const_tab),
-                                                                              const_tab[*nametype_idx as usize - 1].values_to_string(const_tab)),
+                                                                              const_tab[*class_idx as usize].values_to_string(const_tab),
+                                                                              const_tab[*nametype_idx as usize].values_to_string(const_tab)),
             InterfaceMethodRef{class_idx, nametype_idx}            => format!("{}, {}",
-                                                                              const_tab[*class_idx as usize - 1].values_to_string(const_tab),
-                                                                              const_tab[*nametype_idx as usize - 1].values_to_string(const_tab)),
+                                                                              const_tab[*class_idx as usize].values_to_string(const_tab),
+                                                                              const_tab[*nametype_idx as usize].values_to_string(const_tab)),
             NameAndType{name_idx, desc_idx}                        => format!("{}({}), {}({})",
-                                                                              Color::Blue.paint(const_tab[*name_idx as usize - 1].values_to_string(const_tab)),
+                                                                              Color::Blue.paint(const_tab[*name_idx as usize].values_to_string(const_tab)),
                                                                               Color::Red.paint(format!("{}", name_idx)),
-                                                                              Color::Green.paint(const_tab[*desc_idx as usize - 1].values_to_string(const_tab)),
+                                                                              Color::Green.paint(const_tab[*desc_idx as usize].values_to_string(const_tab)),
                                                                               Color::Red.paint(format!("{}", desc_idx))),
             MethodHandle{kind, idx}                                => format!("{}, {}({})",
                                                                               ref_kind_to_str(*kind),
-                                                                              const_tab[*idx as usize - 1].values_to_string(const_tab),
+                                                                              const_tab[*idx as usize].values_to_string(const_tab),
                                                                               Color::Red.paint(format!("{}", idx))),
             MethodType{desc_idx}                                   => format!("{}({})",
-                                                                              const_tab[*desc_idx as usize - 1].values_to_string(const_tab),
+                                                                              const_tab[*desc_idx as usize].values_to_string(const_tab),
                                                                               Color::Red.paint(format!("{}", desc_idx))),
             Dynamic{bootstrap_method_attr_idx, nametype_idx}       => format!("Bootstrap: {} {}",
                                                                               bootstrap_method_attr_idx,
-                                                                              const_tab[*nametype_idx as usize - 1].values_to_string(const_tab)),
+                                                                              const_tab[*nametype_idx as usize].values_to_string(const_tab)),
             InvokeDynamic{bootstrap_method_attr_idx, nametype_idx} => format!("Bootstrap: {} {}",
                                                                               bootstrap_method_attr_idx,
-                                                                              const_tab[*nametype_idx as usize - 1].values_to_string(const_tab)),
+                                                                              const_tab[*nametype_idx as usize].values_to_string(const_tab)),
             Module{name_idx}                                       => format!("{}({})",
-                                                                              const_tab[*name_idx as usize - 1].values_to_string(const_tab),
+                                                                              const_tab[*name_idx as usize].values_to_string(const_tab),
                                                                               Color::Red.paint(format!("{}", name_idx))),
             Package{name_idx}                                      => format!("{}({})",
-                                                                              const_tab[*name_idx as usize - 1].values_to_string(const_tab),
+                                                                              const_tab[*name_idx as usize].values_to_string(const_tab),
                                                                               Color::Red.paint(format!("{}", name_idx))),
             Ghost                                                  => format!(""),
         }
@@ -319,7 +319,7 @@ impl Attributes {
 
         let name_idx = buf.gread_with::<u16>(offset, scroll::BE)?;
         let attr_len = buf.gread_with::<u32>(offset, scroll::BE)?;
-        let name = const_tab[name_idx as usize - 1].values_to_string(const_tab);
+        let name = const_tab[name_idx as usize].values_to_string(const_tab);
         match name.as_str() {
 
             "ConstantValue" => Ok(ConstantValue{name_idx,attr_len,
@@ -805,6 +805,269 @@ impl Attributes {
 
     }
 
+    pub fn values_to_string(&self, const_tab: &Vec<Constants>) -> String {
+        use Attributes::*;
+        use ansi_term::Color;
+
+        match self {
+
+            ConstantValue{name_idx, attr_len: _, const_idx} => format!("{}: {}",
+                                                                    const_tab[*name_idx  as usize].values_to_string(const_tab),
+                                                                    const_tab[*const_idx as usize].values_to_string(const_tab)),
+            Code{name_idx, attr_len, max_stack, max_locals, code_length, code, ex_tab_len, ex_tab, attr_count, attributes} => {
+                format!("{}: ",
+                        const_tab[*name_idx  as usize].values_to_string(const_tab))
+            },
+            StackMapTable{name_idx, attr_len: _, n_entries: _, entries} => {
+                let mut format = String::new();
+                for entry in entries {
+                    format += &entry.value_to_string();
+                }
+                format!("{}: {}",
+                        const_tab[*name_idx  as usize].values_to_string(const_tab),
+                        format)
+            },
+            Exceptions{name_idx, attr_len: _, n_of_ex: _, ex_idx_tab} => {
+                let mut format = String::new();
+                for ex in ex_idx_tab {
+                    format += &const_tab[*ex as usize].values_to_string(const_tab)
+                }
+
+                format!("{}: ",
+                        const_tab[*name_idx  as usize].values_to_string(const_tab))
+            },
+            InnerClasses{name_idx: _, attr_len: _, n_of_classes: _, classes} => {
+                let mut format = String::new();
+                for class in classes {
+                    format += &format!("Inner: {}, ", const_tab[class.inner_class_info_idx as usize].values_to_string(const_tab));
+                    format += &format!("Outer: {}, ", const_tab[class.outer_class_info_idx as usize].values_to_string(const_tab));
+                    format += &format!("Inner name: {}, ", Color::Yellow.paint(const_tab[class.inner_name_idx as usize].values_to_string(const_tab)));
+                    format += &format!("Flags: {}\n", access_flags_to_str(class.inner_class_access_flags));
+                }
+
+                format!("{}",format)
+            },
+            EnclosingMethod{name_idx, attr_len: _, class_idx, method_idx} => {
+                format!("{}: {} {}",
+                        const_tab[*name_idx   as usize].values_to_string(const_tab),
+                        const_tab[*class_idx  as usize].values_to_string(const_tab),
+                        const_tab[*method_idx as usize].values_to_string(const_tab))
+            },
+            Synthetic{name_idx, attr_len: _, } => {
+                format!("{}",
+                        const_tab[*name_idx  as usize].values_to_string(const_tab))
+            },
+            Signature{name_idx, attr_len: _, sig_idx} => {
+                format!("{}: {}",
+                        const_tab[*name_idx as usize].values_to_string(const_tab),
+                        Color::Yellow.paint(const_tab[*sig_idx  as usize].values_to_string(const_tab)))
+            },
+            SourceFile{name_idx, attr_len: _, source_idx} => {
+                format!("{}: {}",
+                        const_tab[*name_idx   as usize].values_to_string(const_tab),
+                        Color::Yellow.paint(const_tab[*source_idx as usize].values_to_string(const_tab)))
+            },
+            SourceDebugExtension{name_idx, attr_len: _, debug_ext} => {
+                format!("{}: {}",
+                        const_tab[*name_idx  as usize].values_to_string(const_tab),
+                        std::str::from_utf8(debug_ext).unwrap())
+            },
+            LineNumberTable{name_idx, attr_len: _, line_num_tab_len: _, line_num_tab: _} => {
+                format!("{}: ",
+                        const_tab[*name_idx  as usize].values_to_string(const_tab))
+            },
+            LocalVariableTable{name_idx, attr_len: _, local_var_tab_len: _, local_var_tab} => {
+                format!("{}: ",
+                        const_tab[*name_idx  as usize].values_to_string(const_tab))
+            },
+            LocalVariableTypeTable{name_idx, attr_len: _, local_var_type_tab_len: _, local_var_type_tab} => {
+                format!("{}: ",
+                        const_tab[*name_idx  as usize].values_to_string(const_tab))
+            },
+            Deprecated{name_idx, attr_len: _, } => {
+                format!("{}",
+                        const_tab[*name_idx  as usize].values_to_string(const_tab))
+            },
+            RuntimeVisibleAnnotations{name_idx, attr_len: _, num_anno: _, anno} => {
+                let mut format = String::new();
+                for ann in anno {
+                    format += &format!("{:?}", ann);
+                }
+
+                format!("{}:\n{}",
+                        const_tab[*name_idx  as usize].values_to_string(const_tab),
+                        format)
+            },
+            RuntimeInvisibleAnnotations{name_idx, attr_len: _, num_anno: _, anno} => {
+                let mut format = String::new();
+                for ann in anno {
+                    format += &format!("{:?}", ann);
+                }
+
+                format!("{}:\n{}",
+                        const_tab[*name_idx  as usize].values_to_string(const_tab),
+                        format)
+            },
+            RuntimeVisibleParameterAnnotations{name_idx, attr_len: _, num_params: _, param_anno} => {
+                let mut format = String::new();
+                for ann in param_anno {
+                    format += &format!("{:?}", ann);
+                }
+
+                format!("{}:\n{}",
+                        const_tab[*name_idx  as usize].values_to_string(const_tab),
+                        format)
+            },
+            RuntimeInvisibleParameterAnnotations{name_idx, attr_len: _, num_params: _, param_anno} => {
+                let mut format = String::new();
+                for ann in param_anno {
+                    format += &format!("{:?}", ann);
+                }
+
+                format!("{}:\n{}",
+                        const_tab[*name_idx  as usize].values_to_string(const_tab),
+                        format)
+            },
+            RuntimeVisibleTypeAnnotations{name_idx, attr_len: _, num_anno: _, anno} => {
+                let mut format = String::new();
+                for ann in anno {
+                    format += &format!("{:?}", ann);
+                }
+
+                format!("{}:\n{}",
+                        const_tab[*name_idx  as usize].values_to_string(const_tab),
+                        format)
+            },
+            RuntimeInvisibleTypeAnnotations{name_idx, attr_len: _, num_anno: _, anno} => {
+                let mut format = String::new();
+                for ann in anno {
+                    format += &format!("{:?}", ann);
+                }
+
+                format!("{}:\n{}",
+                        const_tab[*name_idx  as usize].values_to_string(const_tab),
+                        format)
+            },
+            AnnotationDefault{name_idx, attr_len: _, default_value} => {
+                format!("{}: {:?}",
+                        const_tab[*name_idx as usize].values_to_string(const_tab),
+                        default_value)
+            },
+            BootstrapMethods{name_idx: _, attr_len: _, n_bootstrap_methods: _, bootstrap_methods} => {
+                let mut format = String::new();
+                for boot in bootstrap_methods {
+                    format += &format!("{}:\n", const_tab[boot.bootstrap_method_ref as usize].values_to_string(const_tab));
+                    for arg in &boot.bootstrap_args {
+                        format += &format!("{}\n", const_tab[*arg as usize].values_to_string(const_tab))
+                    }
+                    format.push('\n');
+                }
+
+                format!("{}",
+                        format)
+            },
+            MethodParameters{name_idx, attr_len: _, params_count: _, params} => {
+                let mut format = String::new();
+                for param in params {
+                    format += &format!("{}, {}\n",
+                                       const_tab[param.name_idx as usize].values_to_string(const_tab),
+                                       access_flags_to_str(param.access_flags))
+                }
+
+                format!("{}:\n{}",
+                        const_tab[*name_idx  as usize].values_to_string(const_tab),
+                        format)
+            },
+            Module{name_idx: _, attr_len: _, mod_name_idx, mod_flags, mod_ver_idx, requires_cnt: _, requires,
+                   exports_cnt: _, exports, opens_cnt: _, opens, uses_cnt: _, uses_idx, provides_cnt: _, provides} => {
+                let mut require = String::new();
+                for req in requires {
+                    require += &format!("  {} {} {}\n",
+                                        const_tab[req.idx as usize].values_to_string(const_tab),
+                                        access_flags_to_str(req.flags),
+                                        Color::Blue.paint(const_tab[req.ver_idx as usize].values_to_string(const_tab)));
+                }
+                let mut export = String::new();
+                for exp in exports {
+                    let mut exps = String::new();
+                    for id in &exp.to_idx {
+                        exps += &format!("{}",
+                                         const_tab[*id as usize].values_to_string(const_tab));
+                    }
+                    export += &format!("  {} {} {}\n",
+                                       const_tab[exp.idx as usize].values_to_string(const_tab),
+                                       access_flags_to_str(exp.flags),
+                                       exps);
+                }
+                let mut open = String::new();
+                for op in opens {
+                    let mut ops = String::new();
+                    for id in &op.to_idx {
+                        ops += &format!("{}",
+                                        const_tab[*id as usize].values_to_string(const_tab));
+                    }
+                    open += &format!("  {} {} {}\n",
+                                     const_tab[op.idx as usize].values_to_string(const_tab),
+                                     access_flags_to_str(op.flags),
+                                     ops);
+                }
+                let mut used = String::new();
+                for us in uses_idx {
+                    used += &format!("  {}\n",
+                                     const_tab[*us as usize].values_to_string(const_tab));
+                }
+                let mut provide = String::new();
+                for prov in provides {
+                    let mut provs = String::new();
+                    for id in &prov.with_idx {
+                        provs += &format!("{}",
+                                          const_tab[*id as usize].values_to_string(const_tab));
+                    }
+                    provide += &format!("  {} {}\n",
+                                        const_tab[prov.idx as usize].values_to_string(const_tab),
+                                        provs);
+                }
+
+                format!("{}: {} {}\nRequire:\n{}Exports:\n{}Opens:\n{}Uses:\n{}Provides:\n{}",
+                        const_tab[*mod_name_idx as usize].values_to_string(const_tab),
+                        access_flags_to_str(*mod_flags),
+                        const_tab[*mod_ver_idx as usize].values_to_string(const_tab),
+                        require, export, open, used, provide)
+            },
+            ModulePackages{name_idx, attr_len: _, package_cnt: _, package_idx} => {
+                let mut format = String::new();
+                for package in package_idx {
+                    format += &format!("{}", const_tab[*package as usize].values_to_string(const_tab))
+                }
+
+                format!("{}: ",
+                        const_tab[*name_idx as usize].values_to_string(const_tab))
+            },
+            ModuleMainClass{name_idx, attr_len: _, main_class_idx} => {
+                format!("{}: {}",
+                        const_tab[*name_idx as usize].values_to_string(const_tab),
+                        const_tab[*main_class_idx as usize].values_to_string(const_tab))
+            },
+            NestHost{name_idx: _, attr_len: _, host_class_idx} => {
+                format!("{}",
+                        const_tab[*host_class_idx as usize].values_to_string(const_tab))
+            },
+            NestMembers{name_idx, attr_len: _, n_of_classes: _, classes} => {
+                let mut format = String::new();
+                for class in classes {
+                    format += &format!("{}\n",
+                                      const_tab[*class as usize].values_to_string(const_tab))
+                }
+
+                format!("{}:\n{}",
+                        const_tab[*name_idx as usize].values_to_string(const_tab),
+                        format)
+            },
+
+        }
+
+    }
+
 }
 
 #[derive(Debug)]
@@ -816,6 +1079,52 @@ enum StackMapFrame {
     SameFrameExt(u8, u16),
     AppendFrame(u8, u16, Vec<VerificationTypeInfo>),
     FullFrame(u8, u16, u16, Vec<VerificationTypeInfo>, u16, Vec<VerificationTypeInfo>),
+}
+
+impl StackMapFrame {
+
+    pub fn value_to_string(&self) -> String {
+        use StackMapFrame::*;
+
+        match self {
+            SameFrame(frame_type) => format!("SAME({})", frame_type),
+            SameLocals1StackItemFrame(frame_type, stack) => {
+                format!("SAME_LOCALS_1_STACK_ITEM({}) {:?}",
+                        frame_type,
+                        stack)
+            },
+            SameLocals1StackItemFrameExt(frame_type, offset_delta, stack) => {
+                format!("SAME_LOCALS_1_STACK_ITEM_EXTENDED({}) {} {:?}",
+                        frame_type,
+                        offset_delta,
+                        stack)
+            },
+            ChopFrame(frame_type, offset_delta) => {
+                format!("CHOP({}) {}",
+                        frame_type,
+                        offset_delta)
+            },
+            SameFrameExt(frame_type, offset_delta) => {
+                format!("SAME_FRAME_EXTENDED({}) {}",
+                        frame_type,
+                        offset_delta)
+            },
+            AppendFrame(frame_type, offset_delta, locals) => {
+                format!("APPEND({}) {} {:?}",
+                        frame_type,
+                        offset_delta,
+                        locals)
+            },
+            FullFrame(frame_type, offset_delta, n_locals, locals, n_items, items) => {
+                format!("FULL_FRAME({}) {} {} {:?} {} {:?}",
+                        frame_type,
+                        offset_delta,
+                        n_locals,locals,
+                        n_items,items)
+            }
+        }
+    }
+
 }
 
 #[derive(Debug)]
@@ -1146,6 +1455,7 @@ impl super::FileFormat for JavaClass {
         let major_ver: u16 = buf.gread_with(offset, scroll::BE)?;
         let const_pool_count: u16 = buf.gread_with(offset, scroll::BE)?;
         let mut const_pool_tab = Vec::with_capacity(const_pool_count as usize);
+        const_pool_tab.push(Constants::Ghost);
 
         let mut i = 1;
         while i < const_pool_count {
@@ -1364,9 +1674,11 @@ impl super::FileFormat for JavaClass {
             self.class_header.major_ver)));
         println!("{}", access_flags_to_str(self.class_header.access_flags));
         println!("Class: {}",
-                 self.class_header.const_pool_tab[self.class_header.this_class as usize - 1].values_to_string(&self.class_header.const_pool_tab));
-        println!("Super Class: {}",
-                 self.class_header.const_pool_tab[self.class_header.super_class as usize - 1].values_to_string(&self.class_header.const_pool_tab));
+                 self.class_header.const_pool_tab[self.class_header.this_class as usize].values_to_string(&self.class_header.const_pool_tab));
+        if self.class_header.super_class > 0 {
+            println!("Super Class: {}",
+                     self.class_header.const_pool_tab[self.class_header.super_class as usize].values_to_string(&self.class_header.const_pool_tab));
+        }
         println!();
 
         //
@@ -1391,7 +1703,7 @@ impl super::FileFormat for JavaClass {
                     break;
                 }
                 table.add_row(row![
-                    i + 1,
+                    i,
                     format!("{}", entry.as_ref()),
                     fill(&entry.values_to_string(&self.class_header.const_pool_tab), self.opt.wrap_chars),
                 ]);
@@ -1426,8 +1738,8 @@ impl super::FileFormat for JavaClass {
                     break;
                 }
                 table.add_row(row![
-                    i + 1,
-                    self.class_header.const_pool_tab[*entry as usize - 1].values_to_string(&self.class_header.const_pool_tab),
+                    i,
+                    self.class_header.const_pool_tab[*entry as usize].values_to_string(&self.class_header.const_pool_tab),
                 ]);
             }
             table.printstd();
@@ -1458,12 +1770,57 @@ impl super::FileFormat for JavaClass {
                     trimmed = true;
                     break;
                 }
+                let mut values = String::new();
+                for attr in &entry.attributes {
+                    values.push_str(&attr.values_to_string(&self.class_header.const_pool_tab));
+                };
                 table.add_row(row![
-                    i + 1,
-                    self.class_header.const_pool_tab[entry.name_idx as usize - 1].values_to_string(&self.class_header.const_pool_tab),
+                    i,
+                    self.class_header.const_pool_tab[entry.name_idx as usize].values_to_string(&self.class_header.const_pool_tab),
                     access_flags_to_str(entry.access_flags),
-                    self.class_header.const_pool_tab[entry.desc_idx as usize - 1].values_to_string(&self.class_header.const_pool_tab),
-                    format!("{:X?}", entry.attributes),
+                    self.class_header.const_pool_tab[entry.desc_idx as usize].values_to_string(&self.class_header.const_pool_tab),
+                    // format!("{:X?}", entry.attributes),
+                    fill(&values, self.opt.wrap_chars),
+                ]);
+            }
+            table.printstd();
+            if trimmed {
+                fmt_indentln(format!("Output trimmed..."));
+            }
+            println!();
+        }
+
+        //
+        // METHODS
+        //
+        if self.class_header.method_tab.len() >= 1 {
+            println!("{}", Color::White.underline().paint("Methods"));
+
+            let mut trimmed = false;
+            let mut table = Table::new();
+            let format = prettytable::format::FormatBuilder::new()
+                .borders(' ')
+                .column_separator(' ')
+                .padding(1, 1)
+                .build();
+            table.set_format(format);
+            table.add_row(row!["Idx", "Name", "Flags", "Desc", "Attributes"]);
+
+            for (i, entry) in self.class_header.method_tab.iter().enumerate() {
+                if i == self.opt.trim_lines {
+                    trimmed = true;
+                    break;
+                }
+                let mut values = String::new();
+                for attr in &entry.attributes {
+                    values.push_str(&attr.values_to_string(&self.class_header.const_pool_tab));
+                };
+                table.add_row(row![
+                    i,
+                    self.class_header.const_pool_tab[entry.name_idx as usize].values_to_string(&self.class_header.const_pool_tab),
+                    access_flags_to_str(entry.access_flags),
+                    self.class_header.const_pool_tab[entry.desc_idx as usize].values_to_string(&self.class_header.const_pool_tab),
+                    fill(&values, self.opt.wrap_chars),
                 ]);
             }
             table.printstd();
@@ -1495,9 +1852,9 @@ impl super::FileFormat for JavaClass {
                     break;
                 }
                 table.add_row(row![
-                    i + 1,
+                    i,
                     entry.as_ref(),
-                    // self.class_header.const_pool_tab[entry.attr_name_idx as usize - 1].values_to_string(&self.class_header.const_pool_tab),
+                    fill(&entry.values_to_string(&self.class_header.const_pool_tab), self.opt.wrap_chars),
                 ]);
             }
             table.printstd();
@@ -1506,7 +1863,6 @@ impl super::FileFormat for JavaClass {
             }
             println!();
         }
-
 
         Ok(())
 

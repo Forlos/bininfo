@@ -38,7 +38,7 @@ pub struct Opt {
     trim_lines: usize,
 
     /// Number of chars before wrap
-    #[structopt(short = "w", long = "wrap", default_value = "80", help = "number of chars before wrap")]
+    #[structopt(short = "w", long = "wrap", default_value = "120", help = "number of chars before wrap")]
     wrap_chars: usize,
 
     /// File to print info about
