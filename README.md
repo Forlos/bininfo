@@ -14,7 +14,7 @@ Warning: Error handling is very basic and hasn't been tested.
 - [ ] JPG
 - [ ] PDF
 - [x] ELF
-- [ ] PE
+- [x] PE
 - [x] JAVA CLASS(11)
 
 ## Resources

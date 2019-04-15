@@ -450,11 +450,11 @@ pub fn fmt_pe(header: &COFF_header) {
     println!("{}\n", characteristics_to_str(header.characteristics));
 
     println!("{}",Color::White.underline().paint("Header"));
-    fmt_indentln(format!("Number of sections: {}", header.n_of_sections));
+    fmt_indentln(format!("Number of sections: {}", Color::Purple.paint(format!("{}", header.n_of_sections))));
     fmt_indentln(format!("Timedate stamp: {:#X}", header.timedate_stamp));
     fmt_indentln(format!("Pointer to symbol table: {:#X}", header.pointer_to_symtab));
-    fmt_indentln(format!("Number of symbols: {}", header.n_of_symtab));
-    fmt_indentln(format!("Size of optional header: {}", header.sz_of_opt_header));
+    fmt_indentln(format!("Number of symbols: {}", Color::Purple.paint(format!("{}", header.n_of_symtab))));
+    fmt_indentln(format!("Size of optional header: {}", Color::Green.paint(format!("{}", header.sz_of_opt_header))));
     println!();
 
 }
