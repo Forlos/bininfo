@@ -814,27 +814,48 @@ impl Attributes {
             ConstantValue{name_idx, attr_len: _, const_idx} => format!("{}: {}",
                                                                     const_tab[*name_idx  as usize].values_to_string(const_tab),
                                                                     const_tab[*const_idx as usize].values_to_string(const_tab)),
-            Code{name_idx, attr_len, max_stack, max_locals, code_length, code, ex_tab_len, ex_tab, attr_count, attributes} => {
-                format!("{}: ",
-                        const_tab[*name_idx  as usize].values_to_string(const_tab))
+            Code{name_idx, attr_len: _, max_stack, max_locals, code_length,
+                 code: _, ex_tab_len: _, ex_tab, attr_count: _, attributes} => {
+                let mut exc = String::new();
+                for ex in ex_tab {
+                    exc += &format!("  Start: {}, End: {}, Handler: {}, Type: {}\n",
+                                    ex.start_pc,
+                                    ex.end_pc,
+                                    ex.handler_pc,
+                                    const_tab[ex.catch_type as usize].values_to_string(const_tab));
+                }
+                let mut attr = String::new();
+                for at in attributes {
+                    attr += &format!("{}\n", at.values_to_string(const_tab));
+                }
+
+                format!("{}: Max stack: {}, Max locals: {}, Code_length: {}\n{}{}",
+                        Color::White.underline().paint(const_tab[*name_idx  as usize].values_to_string(const_tab)),
+                        Color::Purple.paint(max_stack.to_string()),
+                        Color::Cyan.paint(max_locals.to_string()),
+                        Color::Green.paint(code_length.to_string()),
+                        exc, attr)
             },
             StackMapTable{name_idx, attr_len: _, n_entries: _, entries} => {
                 let mut format = String::new();
                 for entry in entries {
-                    format += &entry.value_to_string();
+                    format += "  ";
+                    format += &entry.value_to_string(const_tab);
+                    format.push('\n');
                 }
-                format!("{}: {}",
+                format!("{}:\n{}",
                         const_tab[*name_idx  as usize].values_to_string(const_tab),
                         format)
             },
             Exceptions{name_idx, attr_len: _, n_of_ex: _, ex_idx_tab} => {
                 let mut format = String::new();
                 for ex in ex_idx_tab {
-                    format += &const_tab[*ex as usize].values_to_string(const_tab)
+                    format += &const_tab[*ex as usize].values_to_string(const_tab);
                 }
 
-                format!("{}: ",
-                        const_tab[*name_idx  as usize].values_to_string(const_tab))
+                format!("{}:\n{}",
+                        const_tab[*name_idx  as usize].values_to_string(const_tab),
+                        format)
             },
             InnerClasses{name_idx: _, attr_len: _, n_of_classes: _, classes} => {
                 let mut format = String::new();
@@ -857,32 +878,57 @@ impl Attributes {
                 format!("{}",
                         const_tab[*name_idx  as usize].values_to_string(const_tab))
             },
-            Signature{name_idx, attr_len: _, sig_idx} => {
-                format!("{}: {}",
-                        const_tab[*name_idx as usize].values_to_string(const_tab),
-                        Color::Yellow.paint(const_tab[*sig_idx  as usize].values_to_string(const_tab)))
+            Signature{name_idx: _, attr_len: _, sig_idx} => {
+                format!("Sig: {}",
+                        Color::Yellow.paint(const_tab[*sig_idx as usize].values_to_string(const_tab)))
             },
-            SourceFile{name_idx, attr_len: _, source_idx} => {
-                format!("{}: {}",
-                        const_tab[*name_idx   as usize].values_to_string(const_tab),
+            SourceFile{name_idx: _, attr_len: _, source_idx} => {
+                format!("{}",
                         Color::Yellow.paint(const_tab[*source_idx as usize].values_to_string(const_tab)))
             },
-            SourceDebugExtension{name_idx, attr_len: _, debug_ext} => {
-                format!("{}: {}",
-                        const_tab[*name_idx  as usize].values_to_string(const_tab),
+            SourceDebugExtension{name_idx: _, attr_len: _, debug_ext} => {
+                format!("{}",
                         std::str::from_utf8(debug_ext).unwrap())
             },
-            LineNumberTable{name_idx, attr_len: _, line_num_tab_len: _, line_num_tab: _} => {
-                format!("{}: ",
-                        const_tab[*name_idx  as usize].values_to_string(const_tab))
+            LineNumberTable{name_idx, attr_len: _, line_num_tab_len: _, line_num_tab} => {
+                let mut format = String::new();
+                for line in line_num_tab {
+                    format += &format!("  pc: {}, line: {}\n",
+                                      Color::Red.paint(line.start_pc.to_string()),
+                                      Color::Blue.paint(line.line_num.to_string()))
+                }
+
+                format!("{}:\n{}",
+                        const_tab[*name_idx  as usize].values_to_string(const_tab),
+                        format)
             },
             LocalVariableTable{name_idx, attr_len: _, local_var_tab_len: _, local_var_tab} => {
-                format!("{}: ",
-                        const_tab[*name_idx  as usize].values_to_string(const_tab))
+                let mut format = String::new();
+                for local in local_var_tab {
+                    format += &format!("  {}: {}, Start: {}, Idx: {}\n",
+                                       Color::Blue.paint(const_tab[local.name_idx as usize].values_to_string(const_tab)),
+                                       Color::Yellow.paint(const_tab[local.desc_idx as usize].values_to_string(const_tab)),
+                                       local.start_pc,
+                                       local.idx);
+                }
+
+                format!("{}:\n{}",
+                        const_tab[*name_idx  as usize].values_to_string(const_tab),
+                        format)
             },
             LocalVariableTypeTable{name_idx, attr_len: _, local_var_type_tab_len: _, local_var_type_tab} => {
-                format!("{}: ",
-                        const_tab[*name_idx  as usize].values_to_string(const_tab))
+                let mut format = String::new();
+                for local in local_var_type_tab {
+                    format += &format!("  {}: {}, Start: {}, Idx: {}\n",
+                                       Color::Blue.paint(const_tab[local.name_idx as usize].values_to_string(const_tab)),
+                                       Color::Yellow.paint(const_tab[local.sig_idx as usize].values_to_string(const_tab)),
+                                       local.start_pc,
+                                       local.idx);
+                }
+
+                format!("{}:\n{}",
+                        const_tab[*name_idx  as usize].values_to_string(const_tab),
+                        format)
             },
             Deprecated{name_idx, attr_len: _, } => {
                 format!("{}",
@@ -891,7 +937,7 @@ impl Attributes {
             RuntimeVisibleAnnotations{name_idx, attr_len: _, num_anno: _, anno} => {
                 let mut format = String::new();
                 for ann in anno {
-                    format += &format!("{:?}", ann);
+                    format += &format!("  {}\n", ann.anno_to_string(const_tab));
                 }
 
                 format!("{}:\n{}",
@@ -901,7 +947,7 @@ impl Attributes {
             RuntimeInvisibleAnnotations{name_idx, attr_len: _, num_anno: _, anno} => {
                 let mut format = String::new();
                 for ann in anno {
-                    format += &format!("{:?}", ann);
+                    format += &format!("  {}\n", ann.anno_to_string(const_tab));
                 }
 
                 format!("{}:\n{}",
@@ -910,8 +956,10 @@ impl Attributes {
             },
             RuntimeVisibleParameterAnnotations{name_idx, attr_len: _, num_params: _, param_anno} => {
                 let mut format = String::new();
-                for ann in param_anno {
-                    format += &format!("{:?}", ann);
+                for param in param_anno {
+                    for ann in &param.anno {
+                        format += &format!("  {}\n", ann.anno_to_string(const_tab));
+                    }
                 }
 
                 format!("{}:\n{}",
@@ -920,8 +968,10 @@ impl Attributes {
             },
             RuntimeInvisibleParameterAnnotations{name_idx, attr_len: _, num_params: _, param_anno} => {
                 let mut format = String::new();
-                for ann in param_anno {
-                    format += &format!("{:?}", ann);
+                for param in param_anno {
+                    for ann in &param.anno {
+                        format += &format!("  {}\n", ann.anno_to_string(const_tab));
+                    }
                 }
 
                 format!("{}:\n{}",
@@ -931,7 +981,7 @@ impl Attributes {
             RuntimeVisibleTypeAnnotations{name_idx, attr_len: _, num_anno: _, anno} => {
                 let mut format = String::new();
                 for ann in anno {
-                    format += &format!("{:?}", ann);
+                    format += &format!("  {}\n", ann.values_to_string(const_tab));
                 }
 
                 format!("{}:\n{}",
@@ -941,7 +991,7 @@ impl Attributes {
             RuntimeInvisibleTypeAnnotations{name_idx, attr_len: _, num_anno: _, anno} => {
                 let mut format = String::new();
                 for ann in anno {
-                    format += &format!("{:?}", ann);
+                    format += &format!("  {}\n", ann.values_to_string(const_tab));
                 }
 
                 format!("{}:\n{}",
@@ -949,16 +999,16 @@ impl Attributes {
                         format)
             },
             AnnotationDefault{name_idx, attr_len: _, default_value} => {
-                format!("{}: {:?}",
+                format!("{}: {}",
                         const_tab[*name_idx as usize].values_to_string(const_tab),
-                        default_value)
+                        default_value.value.value_to_string(const_tab))
             },
             BootstrapMethods{name_idx: _, attr_len: _, n_bootstrap_methods: _, bootstrap_methods} => {
                 let mut format = String::new();
                 for boot in bootstrap_methods {
                     format += &format!("{}:\n", const_tab[boot.bootstrap_method_ref as usize].values_to_string(const_tab));
                     for arg in &boot.bootstrap_args {
-                        format += &format!("{}\n", const_tab[*arg as usize].values_to_string(const_tab))
+                        format += &format!("  {}\n", const_tab[*arg as usize].values_to_string(const_tab))
                     }
                     format.push('\n');
                 }
@@ -969,7 +1019,7 @@ impl Attributes {
             MethodParameters{name_idx, attr_len: _, params_count: _, params} => {
                 let mut format = String::new();
                 for param in params {
-                    format += &format!("{}, {}\n",
+                    format += &format!("  {}, {}\n",
                                        const_tab[param.name_idx as usize].values_to_string(const_tab),
                                        access_flags_to_str(param.access_flags))
                 }
@@ -991,12 +1041,13 @@ impl Attributes {
                 for exp in exports {
                     let mut exps = String::new();
                     for id in &exp.to_idx {
-                        exps += &format!("{}",
+                        exps += &format!("{}, ",
                                          const_tab[*id as usize].values_to_string(const_tab));
                     }
-                    export += &format!("  {} {} {}\n",
+                    export += &format!("  {} {} {} {}\n",
                                        const_tab[exp.idx as usize].values_to_string(const_tab),
                                        access_flags_to_str(exp.flags),
+                                       if exps.len() > 0 { Color::Green.paint("Exports:") } else { Color::Black.paint("") },
                                        exps);
                 }
                 let mut open = String::new();
@@ -1006,9 +1057,10 @@ impl Attributes {
                         ops += &format!("{}",
                                         const_tab[*id as usize].values_to_string(const_tab));
                     }
-                    open += &format!("  {} {} {}\n",
+                    open += &format!("  {} {} {} {}\n",
                                      const_tab[op.idx as usize].values_to_string(const_tab),
                                      access_flags_to_str(op.flags),
+                                     if ops.len() > 0 { Color::Green.paint("Opens:") } else { Color::Black.paint("") },
                                      ops);
                 }
                 let mut used = String::new();
@@ -1023,8 +1075,9 @@ impl Attributes {
                         provs += &format!("{}",
                                           const_tab[*id as usize].values_to_string(const_tab));
                     }
-                    provide += &format!("  {} {}\n",
+                    provide += &format!("  {} {} {}\n",
                                         const_tab[prov.idx as usize].values_to_string(const_tab),
+                                        if provs.len() > 0 { Color::Green.paint("Provides:") } else { Color::Black.paint("") },
                                         provs);
                 }
 
@@ -1034,34 +1087,30 @@ impl Attributes {
                         const_tab[*mod_ver_idx as usize].values_to_string(const_tab),
                         require, export, open, used, provide)
             },
-            ModulePackages{name_idx, attr_len: _, package_cnt: _, package_idx} => {
+            ModulePackages{name_idx: _, attr_len: _, package_cnt: _, package_idx} => {
                 let mut format = String::new();
                 for package in package_idx {
-                    format += &format!("{}", const_tab[*package as usize].values_to_string(const_tab))
+                    format += &format!("{}\n", const_tab[*package as usize].values_to_string(const_tab))
                 }
 
-                format!("{}: ",
-                        const_tab[*name_idx as usize].values_to_string(const_tab))
+                format!("{}", format)
             },
-            ModuleMainClass{name_idx, attr_len: _, main_class_idx} => {
-                format!("{}: {}",
-                        const_tab[*name_idx as usize].values_to_string(const_tab),
+            ModuleMainClass{name_idx: _, attr_len: _, main_class_idx} => {
+                format!("{}",
                         const_tab[*main_class_idx as usize].values_to_string(const_tab))
             },
             NestHost{name_idx: _, attr_len: _, host_class_idx} => {
                 format!("{}",
                         const_tab[*host_class_idx as usize].values_to_string(const_tab))
             },
-            NestMembers{name_idx, attr_len: _, n_of_classes: _, classes} => {
+            NestMembers{name_idx: _, attr_len: _, n_of_classes: _, classes} => {
                 let mut format = String::new();
                 for class in classes {
                     format += &format!("{}\n",
                                       const_tab[*class as usize].values_to_string(const_tab))
                 }
 
-                format!("{}:\n{}",
-                        const_tab[*name_idx as usize].values_to_string(const_tab),
-                        format)
+                format!("{}",format)
             },
 
         }
@@ -1083,51 +1132,59 @@ enum StackMapFrame {
 
 impl StackMapFrame {
 
-    pub fn value_to_string(&self) -> String {
+    pub fn value_to_string(&self, const_tab: &Vec<Constants>) -> String {
         use StackMapFrame::*;
+        use ansi_term::Color;
 
         match self {
-            SameFrame(frame_type) => format!("SAME({})", frame_type),
+            SameFrame(frame_type) => format!("SAME({})",
+                                             Color::Red.paint(frame_type.to_string())),
             SameLocals1StackItemFrame(frame_type, stack) => {
-                format!("SAME_LOCALS_1_STACK_ITEM({}) {:?}",
-                        frame_type,
-                        stack)
+                format!("SAME_LOCALS_1_STACK_ITEM({}): Stack: {}",
+                        Color::Red.paint(frame_type.to_string()),
+                        stack.value_to_string(const_tab))
             },
             SameLocals1StackItemFrameExt(frame_type, offset_delta, stack) => {
-                format!("SAME_LOCALS_1_STACK_ITEM_EXTENDED({}) {} {:?}",
-                        frame_type,
-                        offset_delta,
-                        stack)
+                format!("SAME_LOCALS_1_STACK_ITEM_EXTENDED({}): Offset: {}, Stack: {}",
+                        Color::Red.paint(frame_type.to_string()),
+                        Color::Blue.paint(offset_delta.to_string()),
+                        stack.value_to_string(const_tab))
             },
             ChopFrame(frame_type, offset_delta) => {
-                format!("CHOP({}) {}",
-                        frame_type,
-                        offset_delta)
+                format!("CHOP({}): Offset: {}",
+                        Color::Red.paint(frame_type.to_string()),
+                        Color::Blue.paint(offset_delta.to_string()))
             },
             SameFrameExt(frame_type, offset_delta) => {
-                format!("SAME_FRAME_EXTENDED({}) {}",
-                        frame_type,
-                        offset_delta)
+                format!("SAME_FRAME_EXTENDED({}): Offset: {}",
+                        Color::Red.paint(frame_type.to_string()),
+                        Color::Blue.paint(offset_delta.to_string()))
             },
             AppendFrame(frame_type, offset_delta, locals) => {
-                format!("APPEND({}) {} {:?}",
-                        frame_type,
-                        offset_delta,
-                        locals)
+                // WOW I understand functional programming !?
+                let format: String = locals.iter().map(|l| format!("\n    {}",l.value_to_string(const_tab))).collect();
+
+                format!("APPEND({}): Offset: {}\n  Locals: {}",
+                        Color::Red.paint(frame_type.to_string()),
+                        Color::Blue.paint(offset_delta.to_string()),
+                        format)
             },
-            FullFrame(frame_type, offset_delta, n_locals, locals, n_items, items) => {
-                format!("FULL_FRAME({}) {} {} {:?} {} {:?}",
-                        frame_type,
-                        offset_delta,
-                        n_locals,locals,
-                        n_items,items)
+            FullFrame(frame_type, offset_delta, _, locals, _, items) => {
+                let locs: String = locals.iter().map(|l| format!("\n    {}",l.value_to_string(const_tab))).collect();
+                let itms: String = items.iter().map(|l|  format!("\n    {}",l.value_to_string(const_tab))).collect();
+
+                format!("FULL_FRAME({}): Offset: {}\n  Locals: {}\n  Items: {}",
+                        Color::Red.paint(frame_type.to_string()),
+                        Color::Blue.paint(offset_delta.to_string()),
+                        locs,
+                        itms)
             }
         }
     }
 
 }
 
-#[derive(Debug)]
+#[derive(Debug, AsRefStr)]
 enum VerificationTypeInfo {
     TopVariable(u8),
     IntegerVariable(u8),
@@ -1156,6 +1213,27 @@ impl VerificationTypeInfo {
             7 => Ok(ObjectVariable(tag, buf.gread_with(offset, scroll::BE)?)),
             8 => Ok(UninitializedVariable(tag, buf.gread_with(offset, scroll::BE)?)),
             _ => Err(Error::from(Problem::Msg(format!("Invalid tag for VerificationTypeInfo")))),
+        }
+
+    }
+
+    pub fn value_to_string(&self, const_tab: &Vec<Constants>) -> String {
+        use VerificationTypeInfo::*;
+
+        match self {
+            TopVariable(_)                   => format!("{}", self.as_ref()),
+            IntegerVariable(_)               => format!("{}", self.as_ref()),
+            FloatVariable(_)                 => format!("{}", self.as_ref()),
+            LongVariable(_)                  => format!("{}", self.as_ref()),
+            DoubleVariable(_)                => format!("{}", self.as_ref()),
+            NullVariable(_)                  => format!("{}", self.as_ref()),
+            UninitializedThisVariable(_)     => format!("{}", self.as_ref()),
+            ObjectVariable(_, idx)           => format!("{}: {}",
+                                                        self.as_ref(),
+                                                        const_tab[*idx as usize].values_to_string(const_tab)),
+            UninitializedVariable(_, offset) => format!("{}: {}",
+                                                        self.as_ref(),
+                                                        offset),
         }
 
     }
@@ -1206,7 +1284,7 @@ struct Local_variable_type {
 struct Annotation {
     type_idx:        u16,
     n_ele_val_pairs: u16,
-    ele_val_pairs:   Vec<Element_value>,
+    ele_val_pairs:   Vec<Name_element_value>,
 }
 
 impl Annotation {
@@ -1216,8 +1294,9 @@ impl Annotation {
         let n_ele_val_pairs = buf.gread_with::<u16>(offset, scroll::BE)?;
         let mut ele_val_pairs = Vec::with_capacity(n_ele_val_pairs as usize);
         for _ in 0..n_ele_val_pairs {
+            let name_idx = buf.gread_with::<u16>(offset, scroll::BE)?;
             let tag = buf.gread_with::<u8>(offset, scroll::BE)?;
-            ele_val_pairs.push(Element_value {tag, value: Value::parse(tag, buf, offset)?})
+            ele_val_pairs.push(Name_element_value{name_idx ,value: Element_value {tag, value: Value::parse(tag, buf, offset)?}})
         }
         Ok(Annotation {
             type_idx,
@@ -1226,9 +1305,23 @@ impl Annotation {
         })
     }
 
+    pub fn anno_to_string(&self, const_tab: &Vec<Constants>) -> String {
+        use ansi_term::Color;
+
+        let mut anno = format!("{}",Color::Yellow.paint(const_tab[self.type_idx as usize].values_to_string(const_tab)));
+        anno.push('\n');
+
+        let mut format = String::new();
+        for val in &self.ele_val_pairs {
+            format += &format!("    {}\n", val.value.value.value_to_string(const_tab));
+        }
+        anno.push_str(&format);
+        anno
+    }
+
 }
 
-#[derive(Debug)]
+#[derive(Debug, AsRefStr)]
 enum Value {
     ConstValueIdx(u16),
     EnumConstValue(u16,u16),
@@ -1259,8 +1352,47 @@ impl Value {
                 }
                 Ok(ArrayValue(num_values, values))
             },
-            _ => Err(Error::from(Problem::Msg(format!("Invalid/unsupported tag for Value: {}", tag))))
+            _ => panic!(),
+            // _ => Err(Error::from(Problem::Msg(format!("Invalid/unsupported tag for Value: {} at: {:#X}", tag, offset))))
 
+        }
+
+    }
+
+    pub fn value_to_string(&self, const_tab: &Vec<Constants>) -> String {
+        use Value::*;
+        use ansi_term::Color;
+
+        match self {
+            ConstValueIdx(idx) => format!("{}: {}",
+                                          self.as_ref(),
+                                          const_tab[*idx as usize].values_to_string(const_tab)),
+            EnumConstValue(type_idx, name_idx) => format!("{}: {} {}",
+                                                          self.as_ref(),
+                                                          Color::Blue.paint(const_tab[*type_idx as usize].values_to_string(const_tab)),
+                                                          Color::Green.paint(const_tab[*name_idx as usize].values_to_string(const_tab))),
+            ClassInfoIdx(idx) => format!("{}: {}",
+                                         self.as_ref(),
+                                         const_tab[*idx as usize].values_to_string(const_tab)),
+            AnnotationValue(anno) => {
+                let mut format = String::new();
+                format += &format!("{}: {}:\n",
+                                   self.as_ref(),
+                                   Color::Blue.paint(const_tab[anno.type_idx as usize].values_to_string(const_tab)));
+                for ann in &anno.ele_val_pairs {
+                    format += &format!("{}", ann.value.value.value_to_string(const_tab));
+                }
+                format
+            },
+            ArrayValue(_, values) => {
+                let mut format = String::from(self.as_ref());
+                format.push('\n');
+
+                for value in values {
+                    format += &format!("      {}\n", value.value.value_to_string(const_tab));
+                }
+                format
+            },
         }
 
     }
@@ -1285,8 +1417,8 @@ struct Type_annotation {
     target_info:     TargetInfo,
     target_path:     Type_path,
     type_idx:        u16,
-    n_ele_var_pairs: u16,
-    ele_var_pairs:   Vec<Name_element_value>,
+    n_ele_val_pairs: u16,
+    ele_val_pairs:   Vec<Name_element_value>,
 }
 
 impl Type_annotation {
@@ -1301,12 +1433,12 @@ impl Type_annotation {
         }
         let target_path       = Type_path {path_len, path};
         let type_idx          = buf.gread_with::<u16>(offset, scroll::BE)?;
-        let n_ele_var_pairs   = buf.gread_with::<u16>(offset, scroll::BE)?;
-        let mut ele_var_pairs = Vec::with_capacity(n_ele_var_pairs as usize);
-        for _ in 0..n_ele_var_pairs {
+        let n_ele_val_pairs   = buf.gread_with::<u16>(offset, scroll::BE)?;
+        let mut ele_val_pairs = Vec::with_capacity(n_ele_val_pairs as usize);
+        for _ in 0..n_ele_val_pairs {
             let name_idx = buf.gread_with::<u16>(offset, scroll::BE)?;
             let tag = buf.gread_with::<u8>(offset, scroll::BE)?;
-            ele_var_pairs.push(Name_element_value{name_idx , value: Element_value { tag, value: Value::parse(tag, buf, offset)? }});
+            ele_val_pairs.push(Name_element_value{name_idx , value: Element_value { tag, value: Value::parse(tag, buf, offset)? }});
         }
 
         Ok(Type_annotation {
@@ -1314,25 +1446,40 @@ impl Type_annotation {
             target_info,
             target_path,
             type_idx,
-            n_ele_var_pairs,
-            ele_var_pairs,
+            n_ele_val_pairs,
+            ele_val_pairs,
         })
+    }
+
+    pub fn values_to_string(&self, const_tab: &Vec<Constants>) -> String {
+        let mut format = String::new();
+        for val in &self.ele_val_pairs {
+            format += &format!("{}: {}\n",
+                               val.value.value.value_to_string(const_tab),
+                               const_tab[val.name_idx as usize].values_to_string(const_tab))
+        }
+
+        format!("{}, {:?} {}: {}",
+                self.target_info.value_to_string(),
+                self.target_path,
+                const_tab[self.type_idx as usize].values_to_string(const_tab),
+                format)
     }
 
 }
 
-#[derive(Debug)]
+#[derive(Debug, AsRefStr)]
 enum TargetInfo {
     TypeParameter(u8),
     Supertype(u16),
-    TypeParameterBound(u8,u8),
+    TypeParameterBound(u8, u8),
     Empty,
     FormalParameter(u8),
     Throws(u16),
     LocalVar(u16, Vec<Local_var>),
     Catch(u16),
     Offset(u16),
-    TypeArgument(u16,u8),
+    TypeArgument(u16, u8),
 }
 
 impl TargetInfo {
@@ -1361,6 +1508,34 @@ impl TargetInfo {
             0x48...0x4B => Ok(TypeArgument(buf.gread_with(offset, scroll::BE)?, buf.gread_with(offset, scroll::BE)?)),
             _ => Err(Error::from(Problem::Msg(format!("Invalid/unsupported target type for target info: {}", target_type)))),
 
+        }
+
+    }
+
+    pub fn value_to_string(&self) -> String {
+        use TargetInfo::*;
+
+        match self {
+            TypeParameter(idx) => format!("{}: {}", self.as_ref(), idx),
+            Supertype(idx) => format!("{}: {}", self.as_ref(), idx),
+            TypeParameterBound(param_idx, bound_idx) => format!("{}: {}, {}",
+                                                                self.as_ref(),
+                                                                param_idx,
+                                                                bound_idx),
+            Empty => format!("{}", self.as_ref()),
+            FormalParameter(idx) => format!("{}: {}", self.as_ref(), idx),
+            Throws(idx) => format!("{}: {}", self.as_ref(), idx),
+            LocalVar(_, table) => format!("{}:\n{}",
+                                          self.as_ref(),
+                                          table.iter().map(|v| format!("  Start: {}, Idx: {}\n",
+                                                                       v.start_pc,
+                                                                       v.idx)).collect::<String>()),
+            Catch(idx) => format!("{}: {}", self.as_ref(), idx),
+            Offset(offset) => format!("{}: {}", self.as_ref(), offset),
+            TypeArgument(offset, idx) => format!("{}: {}, {}",
+                                                 self.as_ref(),
+                                                 offset,
+                                                 idx),
         }
 
     }
@@ -1663,8 +1838,6 @@ impl super::FileFormat for JavaClass {
         use prettytable::Table;
         use textwrap::fill;
 
-        println!("{:#X?}", self);
-
         //
         // JAVA CLASS FILE
         //
@@ -1773,13 +1946,18 @@ impl super::FileFormat for JavaClass {
                 let mut values = String::new();
                 for attr in &entry.attributes {
                     values.push_str(&attr.values_to_string(&self.class_header.const_pool_tab));
+                    values.push('\n');
                 };
+                let mut desc = self.class_header.const_pool_tab[entry.desc_idx as usize].values_to_string(&self.class_header.const_pool_tab);
+                if desc.len() > self.opt.wrap_chars / 4 {
+                    desc = format!("...{}", desc[desc.len() - self.opt.wrap_chars / 4..desc.len()].to_string());
+                }
                 table.add_row(row![
                     i,
                     self.class_header.const_pool_tab[entry.name_idx as usize].values_to_string(&self.class_header.const_pool_tab),
                     access_flags_to_str(entry.access_flags),
-                    self.class_header.const_pool_tab[entry.desc_idx as usize].values_to_string(&self.class_header.const_pool_tab),
-                    // format!("{:X?}", entry.attributes),
+                    desc,
+                    // self.class_header.const_pool_tab[entry.desc_idx as usize].values_to_string(&self.class_header.const_pool_tab),
                     fill(&values, self.opt.wrap_chars),
                 ]);
             }
@@ -1814,12 +1992,18 @@ impl super::FileFormat for JavaClass {
                 let mut values = String::new();
                 for attr in &entry.attributes {
                     values.push_str(&attr.values_to_string(&self.class_header.const_pool_tab));
+                    values.push('\n');
                 };
+                let mut desc = self.class_header.const_pool_tab[entry.desc_idx as usize].values_to_string(&self.class_header.const_pool_tab);
+                if desc.len() > self.opt.wrap_chars / 4 {
+                    desc = format!("...{}", desc[desc.len() - self.opt.wrap_chars / 4..desc.len()].to_string());
+                }
                 table.add_row(row![
                     i,
                     self.class_header.const_pool_tab[entry.name_idx as usize].values_to_string(&self.class_header.const_pool_tab),
                     access_flags_to_str(entry.access_flags),
-                    self.class_header.const_pool_tab[entry.desc_idx as usize].values_to_string(&self.class_header.const_pool_tab),
+                    desc,
+                    // self.class_header.const_pool_tab[entry.desc_idx as usize].values_to_string(&self.class_header.const_pool_tab),
                     fill(&values, self.opt.wrap_chars),
                 ]);
             }
@@ -1854,7 +2038,7 @@ impl super::FileFormat for JavaClass {
                 table.add_row(row![
                     i,
                     entry.as_ref(),
-                    fill(&entry.values_to_string(&self.class_header.const_pool_tab), self.opt.wrap_chars),
+                    fill(&entry.values_to_string(&self.class_header.const_pool_tab), self.opt.wrap_chars + 30),
                 ]);
             }
             table.printstd();

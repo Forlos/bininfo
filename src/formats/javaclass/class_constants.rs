@@ -81,25 +81,25 @@ pub fn access_flags_to_str(access_flags: u16) -> String {
 
     let mut access = String::new();
 
-    if access_flags & ACC_PUBLIC     == 0x0001 { access += "ACC_PUBLIC " }
-    if access_flags & ACC_PRIVATE    == 0x0002 { access += "ACC_PRIVATE " }
-    if access_flags & ACC_PROTECTED  == 0x0004 { access += "ACC_PROTECTED " }
-    if access_flags & ACC_STATIC     == 0x0008 { access += "ACC_STATIC " }
+    if access_flags & ACC_PUBLIC     == 0x0001 { access += "PUBLIC " }
+    if access_flags & ACC_PRIVATE    == 0x0002 { access += "PRIVATE " }
+    if access_flags & ACC_PROTECTED  == 0x0004 { access += "PROTECTED " }
+    if access_flags & ACC_STATIC     == 0x0008 { access += "STATIC " }
 
-    if access_flags & ACC_FINAL      == 0x0010 { access += "ACC_FINAL " }
-    if access_flags & ACC_SUPER      == 0x0020 { access += "ACC_SUPER " }
-    if access_flags & ACC_BRIDGE     == 0x0040 { access += "ACC_BRIDGE " }
-    if access_flags & ACC_VARARGS    == 0x0080 { access += "ACC_VARARGS " }
+    if access_flags & ACC_FINAL      == 0x0010 { access += "FINAL " }
+    if access_flags & ACC_SUPER      == 0x0020 { access += "SUPER " }
+    if access_flags & ACC_BRIDGE     == 0x0040 { access += "BRIDGE " }
+    if access_flags & ACC_VARARGS    == 0x0080 { access += "VARARGS " }
 
-    if access_flags & ACC_NATIVE     == 0x0100 { access += "ACC_NATIVE " }
-    if access_flags & ACC_INTERFACE  == 0x0200 { access += "ACC_INTERFACE " }
-    if access_flags & ACC_ABSTRACT   == 0x0400 { access += "ACC_ABSTRACT " }
-    if access_flags & ACC_STRICT     == 0x0800 { access += "ACC_STRICT " }
+    if access_flags & ACC_NATIVE     == 0x0100 { access += "NATIVE " }
+    if access_flags & ACC_INTERFACE  == 0x0200 { access += "INTERFACE " }
+    if access_flags & ACC_ABSTRACT   == 0x0400 { access += "ABSTRACT " }
+    if access_flags & ACC_STRICT     == 0x0800 { access += "STRICT " }
 
-    if access_flags & ACC_SYNTHETIC  == 0x1000 { access += "ACC_SYNTHETIC " }
-    if access_flags & ACC_ANNOTATION == 0x2000 { access += "ACC_ANNOTATION " }
-    if access_flags & ACC_ENUM       == 0x4000 { access += "ACC_ENUM " }
-    if access_flags & ACC_MODULE     == 0x8000 { access += "ACC_MODULE " }
+    if access_flags & ACC_SYNTHETIC  == 0x1000 { access += "SYNTHETIC " }
+    if access_flags & ACC_ANNOTATION == 0x2000 { access += "ANNOTATION " }
+    if access_flags & ACC_ENUM       == 0x4000 { access += "ENUM " }
+    if access_flags & ACC_MODULE     == 0x8000 { access += "MODULE " }
 
     access
 
@@ -118,15 +118,15 @@ pub const REF_INVOKE_INTERFACE: u8   = 9; // invokeinterface C.m:(A*)T
 pub fn ref_kind_to_str(ref_kind: u8) -> &'static str {
 
     match ref_kind {
-        REF_GET_FIELD          => "REF_GET_FIELD",
-        REF_GET_STATIC         => "REF_GET_STATIC",
-        REF_PUT_FIELD          => "REF_PUT_FIELD",
-        REF_PUT_STATIC         => "REF_PUT_STATIC",
-        REF_INVOKE_VIRTUAL     => "REF_INVOKE_VIRTUAL",
-        REF_INVOKE_STATIC      => "REF_INVOKE_STATIC",
-        REF_INVOKE_SPECIAL     => "REF_INVOKE_SPECIAL",
-        REF_NEW_INVOKE_SPECIAL => "REF_NEW_INVOKE_SPECIAL",
-        REF_INVOKE_INTERFACE   => "REF_INVOKE_INTERFACE",
+        REF_GET_FIELD          => "GET_FIELD",
+        REF_GET_STATIC         => "GET_STATIC",
+        REF_PUT_FIELD          => "PUT_FIELD",
+        REF_PUT_STATIC         => "PUT_STATIC",
+        REF_INVOKE_VIRTUAL     => "INVOKE_VIRTUAL",
+        REF_INVOKE_STATIC      => "INVOKE_STATIC",
+        REF_INVOKE_SPECIAL     => "INVOKE_SPECIAL",
+        REF_NEW_INVOKE_SPECIAL => "NEW_INVOKE_SPECIAL",
+        REF_INVOKE_INTERFACE   => "INVOKE_INTERFACE",
         _ => "INVALID_REF_KIND"
     }
 
