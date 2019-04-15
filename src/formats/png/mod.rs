@@ -2,17 +2,14 @@ use scroll::{self, Pread};
 use ansi_term::Color;
 use failure::Error;
 
+use crate::Opt;
 use crate::Problem;
 use crate::format::{fmt_indent, fmt_indentln, fmt_png_header};
 
 pub const PNG_HEADER: &'static [u8; PNG_HEADER_SIZE] = b"\x89PNG\x0D\x0A\x1A\x0A";
 pub const PNG_HEADER_SIZE: usize = 8;
 
-// TODO allow to use this as a argument and disable trimming in general.
-const TRIM_INDEX: usize = 20;
-// const IHDR_SIZE: usize = PNG_HEADER_SIZE + 25;
-
-#[derive(Debug, Pread)]
+#[derive(Debug, Pread, PartialEq, Eq)]
 #[repr(C)]
 pub struct Prefix {
     pub size: u32,
@@ -31,7 +28,7 @@ impl Prefix {
 
 }
 
-#[derive(Debug, Pread)]
+#[derive(Debug, Pread, PartialEq, Eq)]
 #[repr(C)]
 pub struct Postfix {
     pub checksum: u32,
@@ -65,7 +62,7 @@ struct RGB_16 {
     blue:    u16,
 }
 
-#[derive(Debug, Pread)]
+#[derive(Debug, Pread, PartialEq, Eq)]
 #[repr(C)]
 struct Ihdr {
     prefix:      Prefix,
@@ -133,7 +130,7 @@ struct Idat {
     postfix: Postfix,
 }
 
-#[derive(Debug, Pread)]
+#[derive(Debug, Pread, PartialEq, Eq)]
 #[repr(C)]
 struct Iend {
     prefix:  Prefix,
@@ -471,6 +468,7 @@ struct Ster {
 
 #[derive(Debug)]
 pub struct Png {
+    opt: Opt,
     //
     // Critical chunks
     //
@@ -514,7 +512,7 @@ pub struct Png {
 impl super::FileFormat for Png {
     type Item = Self;
 
-    fn parse(buf: &[u8]) -> Result<Self, Error> {
+    fn parse(opt: Opt, buf: &[u8]) -> Result<Self, Error> {
 
         const CHUNK_SIZE: usize = 12;
         let mut data = Vec::new();
@@ -999,6 +997,8 @@ impl super::FileFormat for Png {
         }
 
         Ok(Png {
+            opt,
+
             ihdr,
             plte,
             idat,
@@ -1073,14 +1073,14 @@ impl super::FileFormat for Png {
             table.set_format(format);
             table.add_row(row![r->"Idx", rFr->"Red", rFg->"Green", rFb->"Blue"]);
             for (i, rgb) in plte.rgb.iter().enumerate() {
+                if i == self.opt.trim_lines {
+                    trimmed = true;
+                    break;
+                }
                 table.add_row(row![r->i,
                                    rFr->format!("{:#04X}", rgb.red),
                                    rFg->format!("{:#04X}", rgb.green),
                                    rFb->format!("{:#04X}", rgb.blue)]);
-                if i == TRIM_INDEX {
-                    trimmed = true;
-                    break;
-                }
             }
             table.printstd();
             if trimmed {
@@ -1174,12 +1174,12 @@ impl super::FileFormat for Png {
             table.set_format(format);
             table.add_row(row![r->"Idx", rFb->"Frequency"]);
             for (i, entry) in hist.entries.iter().enumerate() {
-                table.add_row(row![r->i,
-                                   rFb->format!("{:.8}", (*entry as f64 / hist.sum as f64))]);
-                if i == TRIM_INDEX {
+                if i == self.opt.trim_lines {
                     trimmed = true;
                     break;
                 }
+                table.add_row(row![r->i,
+                                   rFb->format!("{:.8}", (*entry as f64 / hist.sum as f64))]);
             }
             table.printstd();
             if trimmed {
@@ -1318,12 +1318,12 @@ impl super::FileFormat for Png {
                     table.set_format(format);
                     table.add_row(row![r->"Idx", rFw->"Transparency"]);
                     for (i, entry) in data.alpha.iter().enumerate() {
-                        table.add_row(row![r->i,
-                                           rFw->format!("{:#04X}", entry)]);
-                        if i == TRIM_INDEX {
+                        if i == self.opt.trim_lines {
                             trimmed = true;
                             break;
                         }
+                        table.add_row(row![r->i,
+                                           rFw->format!("{:#04X}", entry)]);
                     }
                     table.printstd();
                     if trimmed {
@@ -1455,10 +1455,18 @@ impl super::FileFormat for Png {
                                Fr->"Red", Fg->"Green", Fb->"Blue",
                                Fw->"Alpha", "Freq"]);
             for (i, chunk) in self.splt.iter().enumerate() {
+                if i == self.opt.trim_lines {
+                    trimmed = true;
+                    break;
+                }
                 fmt_png_header("sPLT", &chunk.prefix, &chunk.postfix);
                 fmt_indentln(format!("Name: {}",
                                      Color::Blue.paint(&chunk.name)));
                 for (j, palette) in chunk.plt.iter().enumerate() {
+                    if j == self.opt.trim_lines {
+                        trimmed = true;
+                        break;
+                    }
                     match palette {
                         sPLT::sPLT8(plt) => {
                             table.add_row(row![r->j,
@@ -1468,10 +1476,6 @@ impl super::FileFormat for Png {
                                                rFb->plt.rgb.blue,
                                                rFw->plt.alpha,
                                                r->plt.freq]);
-                            if j == TRIM_INDEX {
-                                trimmed = true;
-                                break;
-                            }
                         },
                         sPLT::sPLT16(plt) => {
                             table.add_row(row![r->j,
@@ -1481,16 +1485,8 @@ impl super::FileFormat for Png {
                                                rFb->plt.rgb.blue,
                                                rFw->plt.alpha,
                                                r->plt.freq]);
-                            if j == TRIM_INDEX {
-                                trimmed = true;
-                                break;
-                            }
                         }
                     }
-                }
-                if i == TRIM_INDEX {
-                    trimmed = true;
-                    break;
                 }
             }
             table.printstd();
@@ -1610,13 +1606,13 @@ impl super::FileFormat for Png {
             table.add_row(row![l->"Idx", l->"Size", l->"Checksum"]);
 
             for (i, idat) in self.idat.iter().enumerate() {
-                table.add_row(row![r->i,
-                                   rFy->idat.prefix.size,
-                                   rFg->format!("{:#010X}", idat.postfix.checksum)]);
-                if i == TRIM_INDEX {
+                if i == self.opt.trim_lines {
                     trimmed = true;
                     break;
                 }
+                table.add_row(row![r->i,
+                                   rFy->idat.prefix.size,
+                                   rFg->format!("{:#010X}", idat.postfix.checksum)]);
             }
             table.printstd();
             if trimmed {
@@ -1632,6 +1628,72 @@ impl super::FileFormat for Png {
         if let Some(iend) = &self.iend {
             fmt_png_header("IEND", &iend.prefix, &iend.postfix);
         }
+
+        Ok(())
+
+    }
+
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_ihrp_parsing() -> Result<(), Error> {
+        let buf = vec![
+            0x00,0x00,0x00,0x0D,
+            0x49,0x48,0x44,0x52,
+            0x00,0x00,0x07,0x80,
+            0x00,0x00,0x04,0x38,
+            0x08,
+            0x02,
+            0x00,
+            0x00,
+            0x00,
+            0x67,0xB1,0x56,0x14,
+            ];
+
+        let ihdr = Ihdr {
+            prefix: Prefix {
+                size: 13,
+                id:   1229472850,
+            },
+            width:       1920,
+            height:      1080,
+            bpp:         8,
+            color:       2,
+            compression: 0,
+            filter:      0,
+            interlace:   0,
+            postfix:     Postfix {
+                checksum: 0x67B15614,
+            }
+
+        };
+
+
+        assert_eq!(ihdr, buf.pread_with::<Ihdr>(0, scroll::BE)?);
+
+        Ok(())
+
+    }
+
+    #[test]
+    fn test_iend_parsing() -> Result<(), Error> {
+        let buf = vec![0x00,0x00,0x00,0x00,0x49,0x45,0x4E,0x44,0xAE,0x42,0x60,0x82];
+
+        let iend = Iend {
+            prefix: Prefix {
+                size: 0,
+                id: 1229278788,
+            },
+            postfix: Postfix {
+                checksum: 0xAE426082
+            }
+        };
+
+        assert_eq!(iend, buf.pread_with::<Iend>(0, scroll::BE)?);
 
         Ok(())
 

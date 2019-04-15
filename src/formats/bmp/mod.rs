@@ -1,5 +1,6 @@
 #![allow(non_camel_case_types, dead_code)]
 use crate::Problem;
+use crate::Opt;
 
 use failure::{Error};
 use scroll::{self, Pread};
@@ -107,6 +108,8 @@ enum Compression_method {
 
 #[repr(C)]
 pub struct Bmp {
+    opt:               Opt,
+
     bmp_header:        Bmp_header,
     dib_header:        Bitmap_info_header,
     rgb_bitmask:       Option<RGB_bitmask>,
@@ -118,7 +121,7 @@ pub struct Bmp {
 impl super::FileFormat for Bmp {
     type Item = Self;
 
-    fn parse(buf: &[u8]) -> Result<Self, Error> {
+    fn parse(opt: Opt, buf: &[u8]) -> Result<Self, Error> {
 
         let bmp_header = buf.pread_with(0, scroll::LE)
             .map_err(|e| Problem::Msg(format!("Could not read bmp header: {}", e)))?;
@@ -154,6 +157,8 @@ impl super::FileFormat for Bmp {
         }
 
         Ok(Bmp {
+            opt,
+
             bmp_header,
             dib_header,
             rgb_bitmask,

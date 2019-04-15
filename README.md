@@ -14,7 +14,8 @@ Warning: Error handling is very basic and hasn't been tested.
 - [ ] JPG
 - [ ] PDF
 - [x] ELF
-- [ ] PE
+- [x] PE
+- [x] JAVA CLASS(11)
 
 ## Resources
 
@@ -27,6 +28,12 @@ Warning: Error handling is very basic and hasn't been tested.
 
 ### Gif
 - https://www.w3.org/Graphics/GIF/spec-gif89a.txt
+
+### JavaClass
+- https://docs.oracle.com/javase/specs/jvms/se11/html/jvms-4.html
+
+### Pe
+- https://docs.microsoft.com/en-us/windows/desktop/Debug/pe-format
 
 ### Png
 - http://www.libpng.org/pub/png/pngsuite.html

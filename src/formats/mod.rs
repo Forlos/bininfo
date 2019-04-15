@@ -5,13 +5,15 @@ pub mod gif;
 pub mod pdf;
 pub mod jpg;
 pub mod pe;
+pub mod javaclass;
 
+use crate::Opt;
 use failure::{Error};
 
 pub trait FileFormat {
     type Item;
 
-    fn parse(buf: &[u8]) -> Result<Self::Item, Error>;
+    fn parse(opt: Opt, buf: &[u8]) -> Result<Self::Item, Error>;
     fn print(&self) -> Result<(), Error>;
 
 }

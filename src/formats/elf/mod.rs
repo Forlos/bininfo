@@ -9,6 +9,7 @@ use failure::{
     Error,
 };
 
+use crate::Opt;
 use crate::Problem;
 use crate::format::{fmt_elf, fmt_elf_sym_table, fmt_elf_rel_table, fmt_elf_rela_table, fmt_elf_dynamic, align, fmt_indent};
 
@@ -751,6 +752,8 @@ impl From<Elf_dynamic_32> for Elf_dynamic {
 // const SIZE_OF_SECTION_HEADER_64: usize = 6 * 8 + 4 * 4;
 
 pub struct Elf {
+    opt:             Opt,
+
     header:          Elf_header,
     program_headers: Vec<Elf_program_header>,
     section_headers: Vec<Elf_section_header>,
@@ -776,7 +779,7 @@ pub struct Elf {
 impl super::FileFormat for Elf {
     type Item = Self;
 
-    fn parse(buf: &[u8]) -> Result<Self, Error> {
+    fn parse(opt: Opt, buf: &[u8]) -> Result<Self, Error> {
 
         let e_ident = buf.pread_with::<E_ident>(0, scroll::BE)?;
         let bit_format = e_ident.ei_class;
@@ -1018,6 +1021,8 @@ impl super::FileFormat for Elf {
         }
 
         Ok(Elf {
+            opt,
+
             header,
             program_headers,
             section_headers,
@@ -1165,7 +1170,7 @@ impl super::FileFormat for Elf {
                  Color::White.paint("SymbolTable"),
                  self.symtab.len());
         if self.symtab.len() > 0 {
-            fmt_elf_sym_table(&self.symtab, &self.symstr, &self.section_headers, &self.sh_strtab)
+            fmt_elf_sym_table(&self.symtab, &self.symstr, &self.section_headers, &self.sh_strtab, self.opt.wrap_chars)
                 .map_err(|e| Problem::Msg(format!("Could not print Symbol table: {}", e)))?;
         }
         println!();
@@ -1177,7 +1182,7 @@ impl super::FileFormat for Elf {
                  Color::White.paint("DynSymTable"),
                  self.dynsym.len());
         if self.dynsym.len() > 0 {
-            fmt_elf_sym_table(&self.dynsym, &self.dynstr, &self.section_headers, &self.sh_strtab)
+            fmt_elf_sym_table(&self.dynsym, &self.dynstr, &self.section_headers, &self.sh_strtab, self.opt.wrap_chars)
                 .map_err(|e| Problem::Msg(format!("Could not print DynSym table: {}", e)))?;
 
         }
@@ -1190,7 +1195,7 @@ impl super::FileFormat for Elf {
                  Color::White.paint("RelDynTable"),
                  self.reldyn.len());
         if self.reldyn.len() > 0 {
-            fmt_elf_rel_table(&self.reldyn, &self.dynsym, &self.dynstr, self.header.e_machine)
+            fmt_elf_rel_table(&self.reldyn, &self.dynsym, &self.dynstr, self.header.e_machine, self.opt.wrap_chars)
                 .map_err(|e| Problem::Msg(format!("Could not print RelDyn table: {}", e)))?;
 
         }
@@ -1203,7 +1208,7 @@ impl super::FileFormat for Elf {
                  Color::White.paint("RelPltTable"),
                  self.relplt.len());
         if self.relplt.len() > 0 {
-            fmt_elf_rel_table(&self.relplt, &self.dynsym, &self.dynstr, self.header.e_machine)
+            fmt_elf_rel_table(&self.relplt, &self.dynsym, &self.dynstr, self.header.e_machine, self.opt.wrap_chars)
                 .map_err(|e| Problem::Msg(format!("Could not print RelPlt table: {}", e)))?;
         }
         println!();
@@ -1215,7 +1220,7 @@ impl super::FileFormat for Elf {
                  Color::White.paint("RelaDynTable"),
                  self.reladyn.len());
         if self.reladyn.len() > 0 {
-            fmt_elf_rela_table(&self.reladyn, &self.dynsym, &self.dynstr, self.header.e_machine)
+            fmt_elf_rela_table(&self.reladyn, &self.dynsym, &self.dynstr, self.header.e_machine, self.opt.wrap_chars)
                 .map_err(|e| Problem::Msg(format!("Could not print RelaDyn table: {}", e)))?;
         }
         println!();
@@ -1227,7 +1232,7 @@ impl super::FileFormat for Elf {
                  Color::White.paint("RelaPltTable"),
                  self.relaplt.len());
         if self.relaplt.len() > 0 {
-            fmt_elf_rela_table(&self.relaplt, &self.dynsym, &self.dynstr, self.header.e_machine)
+            fmt_elf_rela_table(&self.relaplt, &self.dynsym, &self.dynstr, self.header.e_machine, self.opt.wrap_chars)
                 .map_err(|e| Problem::Msg(format!("Could not print RelaPlt table: {}", e)))?;
         }
         println!();
@@ -1242,6 +1247,18 @@ impl super::FileFormat for Elf {
             fmt_elf_dynamic(&self.dynamic, &self.dynstr)
                 .map_err(|e| Problem::Msg(format!("Could not print dynamic table: {}", e)))?;
             println!();
+        }
+
+        //
+        // Libraries
+        //
+        if self.dynamic.len() > 0 {
+            println!("{}", Color::White.paint("Libraries"));
+            for entry in self.dynamic.iter() {
+                if entry.d_tag == crate::format::DT_NEEDED {
+                    println!("{:>4}{}", "", Color::Blue.paint(self.dynstr.pread::<&str>(entry.d_ptr as usize)?));
+                }
+            }
         }
 
         Ok(())

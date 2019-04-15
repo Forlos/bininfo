@@ -1,12 +1,14 @@
 extern crate ansi_term;
-extern crate clap;
-#[macro_use]
-extern crate prettytable;
-extern crate scroll;
-#[macro_use]
-extern crate scroll_derive;
 #[macro_use]
 extern crate failure;
+#[macro_use]
+extern crate prettytable;
+#[macro_use]
+extern crate scroll_derive;
+extern crate scroll;
+extern crate structopt;
+#[macro_use]
+extern crate strum_macros;
 extern crate textwrap;
 
 mod magic;
@@ -17,13 +19,9 @@ mod formats;
 use crate::binary::Binary;
 use crate::formats::FileFormat;
 
-use clap::{
-    App,Arg,
-};
+use failure::Error;
 
-use failure::{
-    Error,
-};
+use structopt::StructOpt;
 
 #[derive(Debug, Fail)]
 pub enum Problem {
@@ -31,23 +29,32 @@ pub enum Problem {
     Msg (String)
 }
 
+#[derive(StructOpt, Debug)]
+#[structopt(name = "bininfo")]
+pub struct Opt {
+
+    /// Number of lines before trim
+    #[structopt(short = "t", long = "trim", default_value = "20", help = "number of lines before trim")]
+    trim_lines: usize,
+
+    /// Number of chars before wrap
+    #[structopt(short = "w", long = "wrap", default_value = "120", help = "number of chars before wrap")]
+    wrap_chars: usize,
+
+    /// File to print info about
+    #[structopt(help = "file path")]
+    file: String
+
+}
+
 use std::fs::File;
 use std::io::Read;
 
 fn main() {
 
-    let app = App::new("bininfo")
-        .about("Binary file info.")
-        .version("0.1.0")
-        .arg(Arg::with_name("FILE")
-             .help("file path")
-             .index(1)
-             .required(true))
-        .get_matches();
+    let opt = Opt::from_args();
 
-    let file_path = app.value_of("FILE").unwrap();
-
-    match run(file_path) {
+    match run(opt) {
         Ok(()) => (),
         Err(e) => {
             eprintln!("{}", e);
@@ -57,7 +64,9 @@ fn main() {
 
 }
 
-fn run(file_path: &str) -> Result<(), Error> {
+fn run(opt: Opt) -> Result<(), Error> {
+
+    let file_path = &opt.file;
 
     let mut fd = File::open(file_path)
         .map_err(|e| Problem::Msg(format!("Cannot open file {:?}: {}", file_path, e)))?;
@@ -66,7 +75,7 @@ fn run(file_path: &str) -> Result<(), Error> {
     fd.read_to_end(&mut buffer)
         .map_err(|e| Problem::Msg(format!("Cannot read file {:?}: {}", file_path, e)))?;
 
-    let bin = Binary::parse(&buffer)?;
+    let bin = Binary::parse(opt, &buffer)?;
 
     match bin {
         Binary::Bmp(bmp) => {
@@ -89,6 +98,9 @@ fn run(file_path: &str) -> Result<(), Error> {
         }
         Binary::Pe(pe) => {
             pe.print()?;
+        }
+        Binary::JavaClass(java_class) => {
+            java_class.print()?;
         }
         Binary::Unknown  => {
             use ansi_term::Color;

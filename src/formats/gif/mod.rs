@@ -1,3 +1,4 @@
+use crate::Opt;
 use failure::{Error};
 use scroll::{self, Pread};
 
@@ -137,6 +138,8 @@ struct Img_desc {
 }
 
 pub struct Gif {
+    opt:      Opt,
+
     header:   Gif_header,
     lsd:      LSD,
     gct:      Option<GCT>,
@@ -154,7 +157,7 @@ pub struct Gif {
 impl super::FileFormat for Gif {
     type Item = Self;
 
-    fn parse(buf: &[u8]) -> Result<Self, Error> {
+    fn parse(opt: Opt, buf: &[u8]) -> Result<Self, Error> {
 
         // Error there should't ever happen because we have read 16 bytes when parsing magic.
         let header = buf.pread_with(0, scroll::BE)?;
@@ -295,6 +298,8 @@ impl super::FileFormat for Gif {
         }
 
         Ok(Gif {
+            opt,
+
             header,
             lsd,
             gct,
