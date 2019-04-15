@@ -143,23 +143,6 @@ struct Image_data_dir {
 #[derive(Debug)]
 struct Data_dirs {
     dirs: Vec<Image_data_dir>,
-    // export_tab:   Image_data_dir,
-    // import_tab:   Image_data_dir,
-    // resource_tab: Image_data_dir,
-    // except_tab:   Image_data_dir,
-    // cert_tab:     Image_data_dir,
-    // basrel_tab:   Image_data_dir,
-    // debug_tab:    Image_data_dir,
-    // arch_tab:     Image_data_dir,
-    // gloptr_tab:   Image_data_dir,
-    // tls_tab:      Image_data_dir,
-    // loadcfg_tab:  Image_data_dir,
-    // bound_imp:    Image_data_dir,
-    // iat:          Image_data_dir,
-    // // Delay Import Descriptor
-    // did:          Image_data_dir,
-    // clr_runtime:  Image_data_dir,
-    // reserved:     Image_data_dir,
 }
 
 #[derive(Debug)]
@@ -221,6 +204,30 @@ struct Aux_sym_record_1 {
     unused:      u16,
 }
 
+#[derive(Debug)]
+struct Attr_cert_table {
+    dw_length: u32,
+    w_revision: u16,
+    w_cert_type: u16,
+    b_cert: Vec<u8>,
+}
+
+#[derive(Debug)]
+struct Delay_import_table {
+    attr: u32,
+    name: u32,
+    mod_handle: u32,
+    /// Delay Import Address Table
+    delay_iat: u32,
+    /// Delay Import Name Table
+    delay_int: u32,
+    /// Bound Delay Import Table
+    bound_delay_it: u32,
+    /// Unload Delay Import Table
+    unload_delay_it: u32,
+    time_stamp: u32,
+}
+
 #[derive(Pread, Debug)]
 struct Debug_dir {
     characteristics: u32,
@@ -247,6 +254,12 @@ struct Export_dir_table {
     export_addr_tab_rva: u32,
     name_ptr_rva:        u32,
     ord_tab_rva:         u32,
+}
+
+#[derive(Pread, Debug)]
+struct Export_addr_table {
+    export_rva: u32,
+    forwarder_rva: u32,
 }
 
 #[derive(Pread, Debug)]
@@ -288,14 +301,30 @@ struct Rsrc_dir_tab {
     n_id_entries:    u16,
 }
 
+#[derive(Pread, Debug)]
+struct Rsrc_dir_entry {
+    name_id: u32,
+    data_subdir: u32,
+}
+
+#[derive(Pread, Debug)]
+struct Rsrc_data_entry {
+    data_rva: u32,
+    size: u32,
+    codepage: u32,
+    reserved: u32,
+}
+
 #[derive(Debug)]
 pub struct Pe {
-    opt:        Opt,
+    opt:                  Opt,
 
-    coff:       COFF_header,
+    coff:                 COFF_header,
     coff_optional_header: Option<COFF_optional_header>,
 
-    sections:   Vec<Section_table>,
+    sections:             Vec<Section_table>,
+
+    resources:            Option<Rsrc_dir_tab>,
 }
 
 impl super::FileFormat for Pe {
@@ -314,7 +343,9 @@ impl super::FileFormat for Pe {
         let win_fields;
         let data_dirs;
 
-        let mut sections = Vec::with_capacity(coff.n_of_sections as usize);
+        let mut resources = None;
+
+        let mut sections: Vec<Section_table> = Vec::with_capacity(coff.n_of_sections as usize);
 
         if coff.sz_of_opt_header > 0 {
             let mut std_coff = buf.pread_with::<Std_COFF_header>(pe_sig + STD_COFF_HEADER_OFFSET, scroll::LE)?;
@@ -360,6 +391,19 @@ impl super::FileFormat for Pe {
             });
         }
 
+        for section in &sections {
+
+            match std::str::from_utf8(&section.name)? {
+
+                ".rsrc" => {
+                    resources = Some(buf.pread_with(section.virt_addr as usize, scroll::LE)?);
+                },
+                _ => (),
+
+            }
+
+        }
+
 
 
         Ok(Pe {
@@ -369,6 +413,8 @@ impl super::FileFormat for Pe {
             coff_optional_header,
 
             sections,
+
+            resources,
         })
 
     }
@@ -377,25 +423,35 @@ impl super::FileFormat for Pe {
         use prettytable::Table;
         // println!("{:#X?}", self);
 
+        //
+        // PE HEADER
+        //
         fmt_pe(&self.coff);
 
         if let Some(opt) = &self.coff_optional_header {
+            //
+            // OPTIONAL HEADER
+            //
             println!("{}", Color::White.underline().paint("Optional Header"));
             fmt_indentln(format!("Major linker version: {}, Minor linker version: {}",
                      opt.std_coff.major_link_ver,
                      opt.std_coff.minor_link_ver));
-            fmt_indentln(format!("Size of code: {:#X}", opt.std_coff.sz_of_code));
-            fmt_indentln(format!("Size of initialized: {:#X}, Size of uninitialized: {:#X}",
-                                 opt.std_coff.sz_of_init,
-                                 opt.std_coff.sz_of_uninit));
-            fmt_indentln(format!("Entry point: {:#X}", opt.std_coff.addr_of_entry));
-            fmt_indentln(format!("Base of code: {:#X}", opt.std_coff.base_of_code));
+            fmt_indentln(format!("Size of code: {}", Color::Green.paint(format!("{:#X}", opt.std_coff.sz_of_code))));
+            fmt_indentln(format!("Size of initialized: {}, Size of uninitialized: {}",
+                                 Color::Green.paint(format!("{:#X}", opt.std_coff.sz_of_init)),
+                                 Color::Green.paint(format!("{:#X}", opt.std_coff.sz_of_uninit))));
+            fmt_indentln(format!("Entry point: {}", Color::Red.paint(format!("{:#X}", opt.std_coff.addr_of_entry))));
+            fmt_indentln(format!("Base of code: {}", Color::Red.paint(format!("{:#X}", opt.std_coff.base_of_code))));
             if opt.std_coff.magic == PE32_MAGIC {
-                fmt_indentln(format!("Base of data: {:#X}", opt.std_coff.base_of_data));
+                fmt_indentln(format!("Base of data: {}", Color::Red.paint(format!("{:#X}", opt.std_coff.base_of_data))));
             }
 
+            //
+            // WINDOWS FIELDS
+            //
+            println!();
             println!("{}", Color::White.underline().paint("Windows Fields"));
-            fmt_indentln(format!("Image base: {:#X}", opt.win_fields.image_base));
+            fmt_indentln(format!("Image base: {}", Color::Red.paint(format!("{:#X}", opt.win_fields.image_base))));
             fmt_indentln(format!("Section alignment: {:#X}, File alignment: {:#X}",
                                  opt.win_fields.section_align,
                                  opt.win_fields.file_align));
@@ -408,21 +464,26 @@ impl super::FileFormat for Pe {
             fmt_indentln(format!("Major subsys version: {}, Minor subsys version: {}",
                                  opt.win_fields.major_sub_ver,
                                  opt.win_fields.minor_sub_ver));
-            fmt_indentln(format!("Size of image: {:#X}, Size of headers: {:#X}",
-                                 opt.win_fields.sz_of_img,
-                                 opt.win_fields.sz_of_headers));
+            fmt_indentln(format!("Size of image: {}, Size of headers: {}",
+                                 Color::Green.paint(format!("{:#X}", opt.win_fields.sz_of_img)),
+                                 Color::Green.paint(format!("{:#X}", opt.win_fields.sz_of_headers))));
             fmt_indentln(format!("Checksum: {:#X}", opt.win_fields.checksum));
             fmt_indentln(format!("Subsystem: {}", subsys_to_str(opt.win_fields.subsys)));
             fmt_indentln(format!("DLL Characteristics: {}", dllchara_to_str(opt.win_fields.dll_chara)));
-            fmt_indentln(format!("Size of stack commit: {:#X}, Size of stack reserve: {:#X}",
-                                 opt.win_fields.sz_stack_commit,
-                                 opt.win_fields.sz_stack_reserve));
-            fmt_indentln(format!("Size of heap commit: {:#X}, Size of heap reserve: {:#X}",
-                                 opt.win_fields.sz_heap_commit,
-                                 opt.win_fields.sz_heap_reserve));
+            fmt_indentln(format!("Size of stack commit: {}, Size of stack reserve: {}",
+                                 Color::Green.paint(format!("{:#X}", opt.win_fields.sz_stack_commit)),
+                                 Color::Green.paint(format!("{:#X}", opt.win_fields.sz_stack_reserve))));
+            fmt_indentln(format!("Size of heap commit: {}, Size of heap reserve: {}",
+                                 Color::Green.paint(format!("{:#X}", opt.win_fields.sz_heap_commit)),
+                                 Color::Green.paint(format!("{:#X}", opt.win_fields.sz_heap_reserve))));
             fmt_indentln(format!("Loader flags: {:#X}", opt.win_fields.loader_flags));
-            fmt_indentln(format!("Number of Rva and Sizes: {:#X}", opt.win_fields.n_of_rva));
+            fmt_indentln(format!("Number of Rva and Sizes: {}",
+                                 Color::Purple.paint(format!("{:#X}", opt.win_fields.n_of_rva))));
 
+            //
+            // DATA DIRECTORIES
+            //
+            println!();
             println!("{}", Color::White.underline().paint("Data Directories"));
             let mut trimmed = false;
             let mut table = Table::new();
@@ -432,7 +493,7 @@ impl super::FileFormat for Pe {
                 .padding(1, 1)
                 .build();
             table.set_format(format);
-            table.add_row(row![r->"Idx", "VirtAddr", "Size"]);
+            table.add_row(row![r->"Idx", "Name", "VirtAddr", "Size"]);
             for (i, data) in opt.data_dirs.dirs.iter().enumerate() {
                 if i == self.opt.trim_lines {
                     trimmed = true;
@@ -440,6 +501,7 @@ impl super::FileFormat for Pe {
                 }
                 table.add_row(row![
                     i,
+                    DATA_DIRS[i],
                     Fr->format!("{:#X}", data.rva),
                     Fg->format!("{:#X}", data.sz),
                 ]);
@@ -453,6 +515,9 @@ impl super::FileFormat for Pe {
             println!();
         }
 
+        //
+        // SECTIONS
+        //
         if self.sections.len() > 0 {
             println!("{}({})",
                      Color::White.underline().paint("Sections"),
