@@ -9,14 +9,22 @@ const MAGIC_SIZE: usize = 16;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum Format {
+    // Image formats
     Png,
     Bmp,
-    Elf,
     Gif,
-    Pdf,
     Jpg,
+    // Executable formats
     Pe,
+    Elf,
     JavaClass,
+    MachO,
+    Lua,
+    // Archive formats
+    Xp3,
+    // Document formats
+    Pdf,
+    // Other
     Unknown,
 }
 
@@ -66,6 +74,18 @@ fn check_magic(magic: &[u8; MAGIC_SIZE]) -> Result<Format, Error> {
     else if &magic[0..javaclass::CLASS_MAGIC_SIZE] == javaclass::CLASS_MAGIC {
         Ok(Format::JavaClass)
     }
+    else if &magic[0..xp3::XP3_MAGIC_SIZE] == xp3::XP3_MAGIC {
+        Ok(Format::Xp3)
+    }
+    else if &magic[0..macho::MACHO_MAGIC_SIZE] == macho::MACHO_MAGIC_32
+        || &magic[0..macho::MACHO_MAGIC_SIZE] == macho::MACHO_MAGIC_64
+        || &magic[0..macho::MACHO_MAGIC_SIZE] == macho::MACHO_MAGIC_32_R
+        || &magic[0..macho::MACHO_MAGIC_SIZE] == macho::MACHO_MAGIC_64_R {
+        Ok(Format::MachO)
+    }
+    else if &magic[0..lua::LUA_MAGIC_SIZE] == lua::LUA_MAGIC {
+        Ok(Format::Lua)
+    }
     else {
         Ok(Format::Unknown)
     }
@@ -89,6 +109,8 @@ mod tests {
         assert!(&vec![0xFF, 0xD8, 0xFF, 0xDB, 0x00, 0x00, 0x00, 0x00,][0..jpg::JPG_MAGIC_SIZE] == jpg::JPG_MAGIC);
         assert!(&vec![0xFF, 0xD8, 0xFF, 0xEE, 0x00, 0x00, 0x00, 0x00,][0..jpg::JPG_MAGIC_SIZE] == jpg::JPG_MAGIC_2);
         assert!(&vec![0x4D, 0x5A, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,][0..pe::PE_MAGIC_SIZE] == pe::PE_MAGIC);
+        assert!(&vec![0xCA, 0xFE, 0xBA, 0xBE, 0x00, 0x00, 0x00, 0x00,][0..javaclass::CLASS_MAGIC_SIZE] == javaclass::CLASS_MAGIC);
+        assert!(&vec![0x58, 0x50, 0x33, 0x0D, 0x0A, 0x20, 0x0A, 0x1A,][0..xp3::XP3_MAGIC_SIZE] == xp3::XP3_MAGIC);
 
         let magic = vec![0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
                          0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,];
