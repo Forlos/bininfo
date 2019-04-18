@@ -458,3 +458,23 @@ pub fn fmt_pe(header: &COFF_header) {
     println!();
 
 }
+
+use crate::formats::macho::{
+    Mach_header,
+    mach_is_exe, mach_is_lib,
+};
+
+pub fn fmt_macho(header: &Mach_header) {
+    use ansi_term::Color;
+
+    print!("Mach-O ");
+
+    if mach_is_lib(header.filetype) {
+        print!("{} ",Color::Blue.paint("LIB"));
+    }
+    if mach_is_exe(header.filetype) {
+        print!("{} ", Color::Red.paint("EXE"))
+    }
+    println!();
+
+}

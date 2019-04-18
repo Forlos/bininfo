@@ -16,6 +16,8 @@ Warning: Error handling is very basic and hasn't been tested.
 - [x] ELF
 - [x] PE
 - [x] JAVA CLASS(11)
+- [ ] MACH-O
+- [ ] LUA
 
 ## Resources
 
@@ -31,6 +33,10 @@ Warning: Error handling is very basic and hasn't been tested.
 
 ### JavaClass
 - https://docs.oracle.com/javase/specs/jvms/se11/html/jvms-4.html
+
+### Mach-O
+- https://opensource.apple.com/source/xnu/xnu-4903.221.2/EXTERNAL_HEADERS/mach-o/loader.h.auto.html
+- https://opensource.apple.com/source/xnu/xnu-4903.221.2/osfmk/mach/
 
 ### Pe
 - https://docs.microsoft.com/en-us/windows/desktop/Debug/pe-format
