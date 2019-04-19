@@ -473,7 +473,7 @@ pub fn fmt_macho(header: &Mach_header) {
         print!("{} ",Color::Blue.paint("LIB"));
     }
     if mach_is_exe(header.filetype) {
-        print!("{} ", Color::Red.paint("EXE"))
+        print!("{} ", Color::Red.paint("EXECUTE"))
     }
     println!();
 
