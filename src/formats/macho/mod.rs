@@ -5,7 +5,7 @@ use scroll::{self, Pread};
 
 use crate::Opt;
 use crate::Problem;
-use crate::format::{fmt_macho};
+use crate::format::{fmt_macho, fmt_indentln};
 
 pub const MACHO_MAGIC_32: &'static [u8; MACHO_MAGIC_SIZE] = b"\xFE\xED\xFA\xCE";
 pub const MACHO_MAGIC_64: &'static [u8; MACHO_MAGIC_SIZE] = b"\xFE\xED\xFA\xCF";
@@ -53,40 +53,78 @@ impl From<Mach_header_32> for Mach_header {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, AsRefStr)]
 enum LoadCommand {
-    Segment(Segment_command),
-    Fvmlib(Fvmlib_command),
-    Dylib(Dylib_command),
-    SubFramework(Sub_framework_command),
-    SubClient(Sub_client_command),
-    SubUmbrella(Sub_umbrella_command),
-    SubLibrary(Sub_library_command),
-    PreboundDylib(Prebound_dylib_command),
-    Dylinker(Dylinker_command),
-    Thread(Thread_command),
-    Routines(Routines_command),
-    SymTab(Symtab_command),
-    DySymTab(Dysymtab_command),
-    TwolevelHints(Twolevel_hints_command),
-    PrebindCksum(Prebind_cksum_command),
-    UUID(UUID_command),
-    Rpath(Rpath_command),
-    LinkeditData(Linkedit_data_command),
-    EncryptionInfo(Encryption_info_command),
-    VersionMin(Version_min_command),
-    BuildVersion(Build_version_command),
-    DyldInfo(Dyld_info_command),
-    LinkerOption(Linker_option_command),
-    Symseg(Symseg_command),
-    Ident(Ident_command),
-    FvmFile(Fvmfile_command),
-    EntryPoint(Entry_point_command),
-    SourceVersion(Source_version_command),
-    Note(Note_command),
+    Segment(u32, Segment_command),
+    Fvmlib(u32, Fvmlib_command),
+    Dylib(u32, Dylib_command),
+    SubFramework(u32, Sub_framework_command),
+    SubClient(u32, Sub_client_command),
+    SubUmbrella(u32, Sub_umbrella_command),
+    SubLibrary(u32, Sub_library_command),
+    PreboundDylib(u32, Prebound_dylib_command),
+    Dylinker(u32, Dylinker_command),
+    Thread(u32, Thread_command),
+    Routines(u32, Routines_command),
+    SymTab(u32, Symtab_command),
+    DySymTab(u32, Dysymtab_command),
+    TwolevelHints(u32, Twolevel_hints_command),
+    PrebindCksum(u32, Prebind_cksum_command),
+    UUID(u32, UUID_command),
+    Rpath(u32, Rpath_command),
+    LinkeditData(u32, Linkedit_data_command),
+    EncryptionInfo(u32, Encryption_info_command),
+    VersionMin(u32, Version_min_command),
+    BuildVersion(u32, Build_version_command),
+    DyldInfo(u32, Dyld_info_command),
+    LinkerOption(u32, Linker_option_command),
+    Symseg(u32, Symseg_command),
+    Ident(u32, Ident_command),
+    FvmFile(u32, Fvmfile_command),
+    EntryPoint(u32, Entry_point_command),
+    SourceVersion(u32, Source_version_command),
+    Note(u32, Note_command),
 }
 
-#[derive(Debug, Pread)]
+impl LoadCommand {
+    fn get_cmd_type(&self) -> u32 {
+        use LoadCommand::*;
+
+        match self  {
+            Segment(cmd,_)        => *cmd,
+            Fvmlib(cmd,_)         => *cmd,
+            Dylib(cmd,_)          => *cmd,
+            SubFramework(cmd,_)   => *cmd,
+            SubClient(cmd,_)      => *cmd,
+            SubUmbrella(cmd,_)    => *cmd,
+            SubLibrary(cmd,_)     => *cmd,
+            PreboundDylib(cmd,_)  => *cmd,
+            Dylinker(cmd,_)       => *cmd,
+            Thread(cmd,_)         => *cmd,
+            Routines(cmd,_)       => *cmd,
+            SymTab(cmd,_)         => *cmd,
+            DySymTab(cmd,_)       => *cmd,
+            TwolevelHints(cmd,_)  => *cmd,
+            PrebindCksum(cmd,_)   => *cmd,
+            UUID(cmd,_)           => *cmd,
+            Rpath(cmd,_)          => *cmd,
+            LinkeditData(cmd,_)   => *cmd,
+            EncryptionInfo(cmd,_) => *cmd,
+            VersionMin(cmd,_)     => *cmd,
+            BuildVersion(cmd,_)   => *cmd,
+            DyldInfo(cmd,_)       => *cmd,
+            LinkerOption(cmd,_)   => *cmd,
+            Symseg(cmd,_)         => *cmd,
+            Ident(cmd,_)          => *cmd,
+            FvmFile(cmd,_)        => *cmd,
+            EntryPoint(cmd,_)     => *cmd,
+            SourceVersion(cmd,_)  => *cmd,
+            Note(cmd,_)           => *cmd,
+        }
+    }
+}
+
+#[derive(Debug, Pread, Clone)]
 struct Load_command {
     cmd:    u32,
     cmd_sz: u32,
@@ -106,7 +144,7 @@ struct Segment_command_32 {
     flags:     u32,
 }
 
-#[derive(Debug, Pread)]
+#[derive(Debug, Pread, Clone)]
 struct Segment_command {
     cmd:       Load_command,
     seg_name:  [u8; 16],
@@ -137,6 +175,12 @@ impl From<Segment_command_32> for Segment_command {
     }
 }
 
+#[derive(Debug)]
+struct Segment {
+    header: Segment_command,
+    sects:  Vec<Section>,
+}
+
 #[derive(Debug, Pread)]
 struct Section_32 {
     sect_name: [u8; 16],
@@ -165,6 +209,7 @@ struct Section {
     flags:     u32,
     reserved1: u32,
     reserved2: u32,
+    reserved3: u32,
 }
 
 impl From<Section_32> for Section {
@@ -181,6 +226,7 @@ impl From<Section_32> for Section {
             flags:     sec.flags,
             reserved1: sec.reserved1,
             reserved2: sec.reserved2,
+            reserved3: 0,
         }
     }
 }
@@ -605,6 +651,8 @@ pub struct MachO {
 
     header: Mach_header,
     commands: Vec<LoadCommand>,
+
+    segments: Vec<Segment>,
 }
 
 impl super::FileFormat for MachO {
@@ -638,109 +686,122 @@ impl super::FileFormat for MachO {
         else { header = Mach_header::from(buf.gread_with::<Mach_header_32>(offset, endianess)?); }
 
         let mut commands = Vec::with_capacity(header.n_cmds as usize);
+        let mut segments = Vec::new();
 
         for i in 0..header.n_cmds {
             let cmd = buf.pread_with::<u32>(*offset, endianess)?;
             let cmd_sz = buf.pread_with::<u32>(*offset + 4, endianess)?;
             commands.push( match cmd {
                 LC_SEGMENT => {
-                    LoadCommand::Segment(Segment_command::from(buf.pread_with::<Segment_command_32>(*offset, endianess)?))
+                    let segment = Segment_command::from(buf.pread_with::<Segment_command_32>(*offset, endianess)?);
+                    let mut sects   = Vec::with_capacity(segment.n_sects as usize);
+                    for i in 0..segment.n_sects as usize {
+                        sects.push(Section::from(buf.pread_with::<Section_32>(*offset + 56 + (i * 68), endianess)?));
+                    }
+                    segments.push(Segment { header: segment.clone(), sects });
+                    LoadCommand::Segment(cmd, segment)
                 },
                 LC_SEGMENT_64 => {
-                    LoadCommand::Segment(buf.pread_with::<Segment_command>(*offset, endianess)?)
+                    let segment = buf.pread_with::<Segment_command>(*offset, endianess)?;
+                    let mut sects   = Vec::with_capacity(segment.n_sects as usize);
+                    for i in 0..segment.n_sects as usize {
+                        sects.push(buf.pread_with::<Section>(*offset + 72 + (i * 80), endianess)?);
+                    }
+                    segments.push(Segment { header: segment.clone(), sects });
+                    LoadCommand::Segment(cmd, segment)
                 },
                 LC_IDFVMLIB | LC_LOADFVMLIB => {
-                    LoadCommand::Fvmlib(buf.pread_with(*offset, endianess)?)
+                    LoadCommand::Fvmlib(cmd, buf.pread_with(*offset, endianess)?)
                 },
                 LC_ID_DYLIB | LC_LOAD_DYLIB | LC_LOAD_WEAK_DYLIB | LC_REEXPORT_DYLIB => {
-                    LoadCommand::Dylib(buf.pread_with(*offset, endianess)?)
+                    LoadCommand::Dylib(cmd, buf.pread_with(*offset, endianess)?)
                 },
                 LC_SUB_FRAMEWORK => {
-                    LoadCommand::SubFramework(buf.pread_with(*offset, endianess)?)
+                    LoadCommand::SubFramework(cmd, buf.pread_with(*offset, endianess)?)
                 },
                 LC_SUB_CLIENT => {
-                    LoadCommand::SubClient(buf.pread_with(*offset, endianess)?)
+                    LoadCommand::SubClient(cmd, buf.pread_with(*offset, endianess)?)
                 },
                 LC_SUB_UMBRELLA => {
-                    LoadCommand::SubUmbrella(buf.pread_with(*offset, endianess)?)
+                    LoadCommand::SubUmbrella(cmd, buf.pread_with(*offset, endianess)?)
                 },
                 LC_SUB_LIBRARY => {
-                    LoadCommand::SubLibrary(buf.pread_with(*offset, endianess)?)
+                    LoadCommand::SubLibrary(cmd, buf.pread_with(*offset, endianess)?)
                 },
                 LC_PREBOUND_DYLIB => {
-                    LoadCommand::PreboundDylib(buf.pread_with(*offset,endianess)?)
+                    LoadCommand::PreboundDylib(cmd, buf.pread_with(*offset,endianess)?)
                 },
                 LC_ID_DYLINKER | LC_LOAD_DYLINKER | LC_DYLD_ENVIRONMENT => {
-                    LoadCommand::Dylinker(buf.pread_with(*offset, endianess)?)
+                    LoadCommand::Dylinker(cmd, buf.pread_with(*offset, endianess)?)
                 },
                 // LC_THREAD | LC_UNIXTHREAD => {
-                //     LoadCommand::Thread(buf.pread_with(*offset, endianess)?)
+                //     LoadCommand::Thread(cmd, buf.pread_with(*offset, endianess)?)
                 // },
                 LC_ROUTINES => {
-                    LoadCommand::Routines(Routines_command::from(buf.pread_with::<Routines_command_32>(*offset, endianess)?))
+                    LoadCommand::Routines(cmd, Routines_command::from(buf.pread_with::<Routines_command_32>(*offset, endianess)?))
                 },
                 LC_ROUTINES_64 => {
-                    LoadCommand::Routines(buf.pread_with::<Routines_command>(*offset, endianess)?)
+                    LoadCommand::Routines(cmd, buf.pread_with::<Routines_command>(*offset, endianess)?)
                 },
                 LC_SYMTAB => {
-                    LoadCommand::SymTab(buf.pread_with(*offset, endianess)?)
+                    LoadCommand::SymTab(cmd, buf.pread_with(*offset, endianess)?)
                 },
                 LC_DYSYMTAB => {
-                    LoadCommand::DySymTab(buf.pread_with(*offset, endianess)?)
+                    LoadCommand::DySymTab(cmd, buf.pread_with(*offset, endianess)?)
                 },
                 LC_TWOLEVEL_HINTS => {
-                    LoadCommand::TwolevelHints(buf.pread_with(*offset, endianess)?)
+                    LoadCommand::TwolevelHints(cmd, buf.pread_with(*offset, endianess)?)
                 },
                 LC_PREBIND_CKSUM => {
-                    LoadCommand::PrebindCksum(buf.pread_with(*offset, endianess)?)
+                    LoadCommand::PrebindCksum(cmd, buf.pread_with(*offset, endianess)?)
                 },
                 LC_UUID => {
-                    LoadCommand::UUID(buf.pread_with(*offset, endianess)?)
+                    LoadCommand::UUID(cmd, buf.pread_with(*offset, endianess)?)
                 },
                 LC_RPATH => {
-                    LoadCommand::Rpath(buf.pread_with(*offset, endianess)?)
+                    LoadCommand::Rpath(cmd, buf.pread_with(*offset, endianess)?)
                 },
                 LC_CODE_SIGNATURE | LC_SEGMENT_SPLIT_INFO | LC_FUNCTION_STARTS |
                 LC_DATA_IN_CODE | LC_DYLIB_CODE_SIGN_DRS | LC_LINKER_OPTIMIZATION_HINT => {
-                    LoadCommand::LinkeditData(buf.pread_with(*offset, endianess)?)
+                    LoadCommand::LinkeditData(cmd, buf.pread_with(*offset, endianess)?)
                 },
                 LC_ENCRYPTION_INFO => {
-                    LoadCommand::EncryptionInfo(Encryption_info_command::from(
+                    LoadCommand::EncryptionInfo(cmd, Encryption_info_command::from(
                         buf.pread_with::<Encryption_info_command_32>(*offset, endianess)?))
                 },
                 LC_ENCRYPTION_INFO_64 => {
-                    LoadCommand::EncryptionInfo(buf.pread_with::<Encryption_info_command>(*offset, endianess)?)
+                    LoadCommand::EncryptionInfo(cmd, buf.pread_with::<Encryption_info_command>(*offset, endianess)?)
                 },
                 LC_VERSION_MIN_MACOSX | LC_VERSION_MIN_IPHONEOS |
                 LC_VERSION_MIN_WATCHOS | LC_VERSION_MIN_TVOS => {
-                    LoadCommand::VersionMin(buf.pread_with(*offset, endianess)?)
+                    LoadCommand::VersionMin(cmd, buf.pread_with(*offset, endianess)?)
                 },
                 LC_BUILD_VERSION => {
-                    LoadCommand::BuildVersion(buf.pread_with(*offset, endianess)?)
+                    LoadCommand::BuildVersion(cmd, buf.pread_with(*offset, endianess)?)
                 },
                 LC_DYLD_INFO | LC_DYLD_INFO_ONLY => {
-                    LoadCommand::DyldInfo(buf.pread_with(*offset, endianess)?)
+                    LoadCommand::DyldInfo(cmd, buf.pread_with(*offset, endianess)?)
                 },
                 // LC_LINKER_OPTION => {
-                //     LoadCommand::LinkerOption(buf.pread_with(*offset, endianess)?)
+                //     LoadCommand::LinkerOption(cmd, buf.pread_with(*offset, endianess)?)
                 // },
                 LC_SYMSEG => {
-                    LoadCommand::Symseg(buf.pread_with(*offset, endianess)?)
+                    LoadCommand::Symseg(cmd, buf.pread_with(*offset, endianess)?)
                 },
                 // LC_IDENT => {
-                //     LoadCommand::Ident(buf.pread_with(*offset, endianess)?)
+                //     LoadCommand::Ident(cmd, buf.pread_with(*offset, endianess)?)
                 // }
                 LC_FVMFILE => {
-                    LoadCommand::FvmFile(buf.pread_with(*offset, endianess)?)
+                    LoadCommand::FvmFile(cmd, buf.pread_with(*offset, endianess)?)
                 },
                 LC_MAIN => {
-                    LoadCommand::EntryPoint(buf.pread_with(*offset, endianess)?)
+                    LoadCommand::EntryPoint(cmd, buf.pread_with(*offset, endianess)?)
                 },
                 LC_SOURCE_VERSION => {
-                    LoadCommand::SourceVersion(buf.pread_with(*offset, endianess)?)
+                    LoadCommand::SourceVersion(cmd, buf.pread_with(*offset, endianess)?)
                 },
                 LC_NOTE => {
-                    LoadCommand::Note(buf.pread_with(*offset, endianess)?)
+                    LoadCommand::Note(cmd, buf.pread_with(*offset, endianess)?)
                 }
                 _ => return Err(Error::from(Problem::Msg(format!("Invalid/Unsupported command type: {} at: {:#X}", cmd, *offset)))),
             });
@@ -753,15 +814,111 @@ impl super::FileFormat for MachO {
 
             header,
             commands,
+            segments,
         })
 
     }
 
     fn print(&self) -> Result<(), Error> {
+        use ansi_term::Color;
+        use prettytable::Table;
 
         println!("{:#X?}", self);
 
+        //
+        // MACH-O FILE
+        //
         fmt_macho(&self.header);
+        println!();
+
+        //
+        // COMMANDS
+        //
+        if self.commands.len() >= 1 {
+            println!("{}({})",
+                     Color::White.underline().paint("LoadCommands"),
+                     self.commands.len());
+
+            let mut trimmed = false;
+            let mut table = Table::new();
+            let format = prettytable::format::FormatBuilder::new()
+                .borders(' ')
+                .column_separator(' ')
+                .padding(1, 1)
+                .build();
+            table.set_format(format);
+            table.add_row(row!["Idx", "Name"]);
+
+            for (i, entry) in self.commands.iter().enumerate() {
+                if i == self.opt.trim_lines {
+                    trimmed = true;
+                    break;
+                }
+                table.add_row(row![
+                    i,
+                    segment_to_str(entry.get_cmd_type()),
+                ]);
+            }
+            table.printstd();
+            if trimmed {
+                fmt_indentln(format!("Output trimmed..."));
+            }
+            println!();
+
+        }
+
+        //
+        // SEGMENTS
+        //
+        if self.segments.len() >= 1 {
+            println!("{}({})",
+                     Color::White.underline().paint("Segments"),
+                     self.commands.len());
+
+            for entry in &self.segments {
+
+                fmt_indentln(format!("{}({})",
+                                     Color::Fixed(75).paint(std::str::from_utf8(&entry.header.seg_name)?),
+                                     entry.sects.len()));
+
+                if entry.sects.len() >= 1 {
+
+                    let mut trimmed = false;
+                    let mut table = Table::new();
+                    let format = prettytable::format::FormatBuilder::new()
+                        .borders(' ')
+                        .column_separator(' ')
+                        .padding(3, 1)
+                        .build();
+                    table.set_format(format);
+                    table.add_row(row!["Idx", "Name", "Addr", "Size", "FileOff", "FileSize", "MaxProt", "InitProt", "Nsects", "Flags"]);
+
+                    for (i, entry) in entry.sects.iter().enumerate() {
+                        if i == self.opt.trim_lines {
+                            trimmed = true;
+                            break;
+                        }
+                        table.add_row(row![
+                            i,
+                            std::str::from_utf8(&entry.sect_name)?,
+                            Fr->format!("{:#X}", entry.addr),
+                            Fg->format!("{:#X}", entry.size),
+                            Fy->format!("{:#X}", entry.offset),
+                            Fg->format!("{:#X}", entry.size),
+                            format!("{:#X}", entry.align),
+                            format!("{:#X}", entry.reloff),
+                            Fmr->entry.n_reloc,
+                            format!("{:#X}", entry.flags),
+                        ]);
+                    }
+                    table.printstd();
+                    if trimmed {
+                        fmt_indentln(format!("Output trimmed..."));
+                    }
+                }
+                println!();
+            }
+        }
 
         Ok(())
     }

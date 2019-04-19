@@ -109,6 +109,65 @@ pub const LC_VERSION_MIN_WATCHOS: u32      = 0x30;
 pub const LC_NOTE: u32                     = 0x31;
 pub const LC_BUILD_VERSION: u32            = 0x32;
 
+pub fn segment_to_str(segment: u32) -> &'static str {
+    match segment {
+        LC_SEGMENT        =>"LC_SEGMENT",
+        LC_SYMTAB         =>"LC_SYMTAB",
+        LC_SYMSEG         =>"LC_SYMSEG",
+        LC_THREAD         =>"LC_THREAD",
+        LC_UNIXTHREAD     =>"LC_UNIXTHREAD",
+        LC_LOADFVMLIB     =>"LC_LOADFVMLIB",
+        LC_IDFVMLIB       =>"LC_IDFVMLIB",
+        LC_IDENT          =>"LC_IDENT",
+        LC_FVMFILE        =>"LC_FVMFILE",
+        LC_PREPAGE        =>"LC_PREPAGE",
+        LC_DYSYMTAB       =>"LC_DYSYMTAB",
+        LC_LOAD_DYLIB     =>"LC_LOAD_DYLIB",
+        LC_ID_DYLIB       =>"LC_ID_DYLIB",
+        LC_LOAD_DYLINKER  =>"LC_LOAD_DYLINKER",
+        LC_ID_DYLINKER    =>"LC_ID_DYLINKER",
+        LC_PREBOUND_DYLIB =>"LC_PREBOUND_DYLIB",
+        LC_ROUTINES       =>"LC_ROUTINES",
+        LC_SUB_FRAMEWORK  =>"LC_SUB_FRAMEWORK",
+        LC_SUB_UMBRELLA   =>"LC_SUB_UMBRELLA",
+        LC_SUB_CLIENT     =>"LC_SUB_CLIENT",
+        LC_SUB_LIBRARY    =>"LC_SUB_LIBRARY",
+        LC_TWOLEVEL_HINTS =>"LC_TWOLEVEL_HINTS",
+        LC_PREBIND_CKSUM  =>"LC_PREBIND_CKSUM",
+
+        LC_LOAD_WEAK_DYLIB          =>"LC_LOAD_WEAK_DYLIB",
+        LC_SEGMENT_64               =>"LC_SEGMENT_64",
+        LC_ROUTINES_64              =>"LC_ROUTINES_64",
+        LC_UUID                     =>"LC_UUID",
+        LC_RPATH                    =>"LC_RPATH",
+        LC_CODE_SIGNATURE           =>"LC_CODE_SIGNATURE",
+        LC_SEGMENT_SPLIT_INFO       =>"LC_SEGMENT_SPLIT_INFO",
+        LC_REEXPORT_DYLIB           =>"LC_REEXPORT_DYLIB",
+        LC_LAZY_LOAD_DYLIB          =>"LC_LAZY_LOAD_DYLIB",
+        LC_ENCRYPTION_INFO          =>"LC_ENCRYPTION_INFO",
+        LC_DYLD_INFO                =>"LC_DYLD_INFO",
+        LC_DYLD_INFO_ONLY           =>"LC_DYLD_INFO_ONLY",
+        LC_LOAD_UPWARD_DYLIB        =>"LC_LOAD_UPWARD_DYLIB",
+        LC_VERSION_MIN_MACOSX       =>"LC_VERSION_MIN_MACOSX",
+        LC_VERSION_MIN_IPHONEOS     =>"LC_VERSION_MIN_IPHONEOS",
+        LC_FUNCTION_STARTS          =>"LC_FUNCTION_STARTS",
+        LC_DYLD_ENVIRONMENT         =>"LC_DYLD_ENVIRONMENT",
+        LC_MAIN                     =>"LC_MAIN",
+        LC_DATA_IN_CODE             =>"LC_DATA_IN_CODE",
+        LC_SOURCE_VERSION           =>"LC_SOURCE_VERSION",
+        LC_DYLIB_CODE_SIGN_DRS      =>"LC_DYLIB_CODE_SIGN_DRS",
+        LC_ENCRYPTION_INFO_64       =>"LC_ENCRYPTION_INFO_64",
+        LC_LINKER_OPTION            =>"LC_LINKER_OPTION",
+        LC_LINKER_OPTIMIZATION_HINT =>"LC_LINKER_OPTIMIZATION_HINT",
+        LC_VERSION_MIN_TVOS         =>"LC_VERSION_MIN_TVOS",
+        LC_VERSION_MIN_WATCHOS      =>"LC_VERSION_MIN_WATCHOS",
+        LC_NOTE                     =>"LC_NOTE",
+        LC_BUILD_VERSION            =>"LC_BUILD_VERSION",
+
+        _ => "INVALID_SEGMENT"
+    }
+}
+
 // * Constants for the flags field of the segment_command
 
 pub const	SG_HIGHVM: u32 = 0x1;
