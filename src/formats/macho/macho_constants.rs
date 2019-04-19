@@ -239,3 +239,107 @@ pub const EXPORT_SYMBOL_FLAGS_KIND_THREAD_LOCAL: u32 = 0x01;
 pub const EXPORT_SYMBOL_FLAGS_WEAK_DEFINITION:   u32 = 0x04;
 pub const EXPORT_SYMBOL_FLAGS_REEXPORT:          u32 = 0x08;
 pub const EXPORT_SYMBOL_FLAGS_STUB_AND_RESOLVER: u32 = 0x10;
+
+// * Constants for the type of a section
+
+pub const	S_REGULAR:          u32 = 0x0;
+pub const	S_ZEROFILL:         u32 = 0x1;
+pub const	S_CSTRING_LITERALS: u32 = 0x2;
+pub const	S_4BYTE_LITERALS:   u32 = 0x3;
+pub const	S_8BYTE_LITERALS:   u32 = 0x4;
+pub const	S_LITERAL_POINTERS: u32 = 0x5;
+
+//  * For the two types of symbol pointers sections and the symbol stubs section they have indirect symbol table entries.
+
+pub const	S_NON_LAZY_SYMBOL_POINTERS:   u32 = 0x6;
+pub const	S_LAZY_SYMBOL_POINTERS:       u32 = 0x7;
+pub const	S_SYMBOL_STUBS:               u32 = 0x8;
+pub const	S_MOD_INIT_FUNC_POINTERS:     u32 = 0x9;
+pub const	S_MOD_TERM_FUNC_POINTERS:     u32 = 0xa;
+pub const	S_COALESCED:                  u32 = 0xb;
+pub const	S_GB_ZEROFILL:                u32 = 0xc;
+pub const	S_INTERPOSING:                u32 = 0xd;
+pub const	S_16BYTE_LITERALS:            u32 = 0xe;
+pub const	S_DTRACE_DOF:                 u32 = 0xf;
+pub const	S_LAZY_DYLIB_SYMBOL_POINTERS: u32 = 0x10;
+
+// * Section types to support thread local variables
+
+pub const S_THREAD_LOCAL_REGULAR:                u32 = 0x11;
+pub const S_THREAD_LOCAL_ZEROFILL:               u32 = 0x12;
+pub const S_THREAD_LOCAL_VARIABLES:              u32 = 0x13;
+pub const S_THREAD_LOCAL_VARIABLE_POINTERS:      u32 = 0x14;
+pub const S_THREAD_LOCAL_INIT_FUNCTION_POINTERS: u32 = 0x15;
+
+pub fn section_type_to_str(section: u32) -> &'static str {
+    match section & 0x000000ff {
+        S_REGULAR                             => "S_REGULAR",
+        S_ZEROFILL                            => "S_ZEROFILL",
+        S_CSTRING_LITERALS                    => "S_CSTRING_LITERALS",
+        S_4BYTE_LITERALS                      => "S_4BYTE_LITERALS",
+        S_8BYTE_LITERALS                      => "S_8BYTE_LITERALS",
+        S_LITERAL_POINTERS                    => "S_LITERAL_POINTERS",
+
+        S_NON_LAZY_SYMBOL_POINTERS            => "S_NON_LAZY_SYMBOL_POINTERS",
+        S_LAZY_SYMBOL_POINTERS                => "S_LAZY_SYMBOL_POINTERS",
+        S_SYMBOL_STUBS                        => "S_SYMBOL_STUBS",
+        S_MOD_INIT_FUNC_POINTERS              => "S_MOD_INIT_FUNC_POINTERS",
+        S_MOD_TERM_FUNC_POINTERS              => "S_MOD_TERM_FUNC_POINTERS",
+        S_COALESCED                           => "S_COALESCED",
+        S_GB_ZEROFILL                         => "S_GB_ZEROFILL",
+        S_INTERPOSING                         => "S_INTERPOSING",
+        S_16BYTE_LITERALS                     => "S_16BYTE_LITERALS",
+        S_DTRACE_DOF                          => "S_DTRACE_DOF",
+        S_LAZY_DYLIB_SYMBOL_POINTERS          => "S_LAZY_DYLIB_SYMBOL_POINTERS",
+
+        S_THREAD_LOCAL_REGULAR                => "S_THREAD_LOCAL_REGULAR",
+        S_THREAD_LOCAL_ZEROFILL               => "S_THREAD_LOCAL_ZEROFILL",
+        S_THREAD_LOCAL_VARIABLES              => "S_THREAD_LOCAL_VARIABLES",
+        S_THREAD_LOCAL_VARIABLE_POINTERS      => "S_THREAD_LOCAL_VARIABLE_POINTERS",
+        S_THREAD_LOCAL_INIT_FUNCTION_POINTERS => "S_THREAD_LOCAL_INIT_FUNCTION_POINTERS",
+
+        _ => "INVALID_SECTION_TYPE",
+    }
+}
+
+// * Constants for the section attributes part of the flags field of a section structure.
+
+pub const SECTION_ATTRIBUTES_USR:     u32 = 0xff000000;
+pub const S_ATTR_PURE_INSTRUCTIONS:   u32 = 0x80000000;
+pub const S_ATTR_NO_TOC:              u32 = 0x40000000;
+pub const S_ATTR_STRIP_STATIC_SYMS:   u32 = 0x20000000;
+pub const S_ATTR_NO_DEAD_STRIP:       u32 = 0x10000000;
+pub const S_ATTR_LIVE_SUPPORT:        u32 = 0x08000000;
+pub const S_ATTR_SELF_MODIFYING_CODE: u32 = 0x04000000;
+
+// * If a segment contains any sections marked with S_ATTR_DEBUG then all sections in that segment must have this attribute.
+
+pub const	S_ATTR_DEBUG:             u32 = 0x02000000;
+pub const SECTION_ATTRIBUTES_SYS:   u32 = 0x00ffff00;
+pub const S_ATTR_SOME_INSTRUCTIONS: u32 = 0x00000400;
+pub const S_ATTR_EXT_RELOC:         u32 = 0x00000200;
+pub const S_ATTR_LOC_RELOC:         u32 = 0x00000100;
+
+pub fn section_attr_to_str(section: u32) -> String {
+
+    let sec = section & 0xffffff00;
+
+    let mut attr = String::new();
+
+    if SECTION_ATTRIBUTES_USR     & sec == 0xff000000 { attr += "ATTRIBUTES_USR " }
+    if S_ATTR_PURE_INSTRUCTIONS   & sec == 0x80000000 { attr += "PURE_INSTRUCTIONS " }
+    if S_ATTR_NO_TOC              & sec == 0x40000000 { attr += "NO_TOC " }
+    if S_ATTR_STRIP_STATIC_SYMS   & sec == 0x20000000 { attr += "STRIP_STATIC_SYMS " }
+    if S_ATTR_NO_DEAD_STRIP       & sec == 0x10000000 { attr += "NO_DEAD_STRIP " }
+    if S_ATTR_LIVE_SUPPORT        & sec == 0x08000000 { attr += "LIVE_SUPPORT " }
+    if S_ATTR_SELF_MODIFYING_CODE & sec == 0x04000000 { attr += "SELF_MODIFYING_CODE " }
+
+    if S_ATTR_DEBUG               & sec == 0x02000000 { attr += "DEBUG " }
+    if SECTION_ATTRIBUTES_SYS     & sec == 0x00ffff00 { attr += "ATTRIBUTES_SYS " }
+    if S_ATTR_SOME_INSTRUCTIONS   & sec == 0x00000400 { attr += "SOME_INSTRUCTIONS " }
+    if S_ATTR_EXT_RELOC           & sec == 0x00000200 { attr += "EXT_RELOC " }
+    if S_ATTR_LOC_RELOC           & sec == 0x00000100 { attr += "LOC_RELOC " }
+
+    attr
+
+}

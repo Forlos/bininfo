@@ -888,10 +888,10 @@ impl super::FileFormat for MachO {
                     let format = prettytable::format::FormatBuilder::new()
                         .borders(' ')
                         .column_separator(' ')
-                        .padding(3, 1)
+                        .padding(3, 0)
                         .build();
                     table.set_format(format);
-                    table.add_row(row!["Idx", "Name", "Addr", "Size", "FileOff", "FileSize", "MaxProt", "InitProt", "Nsects", "Flags"]);
+                    table.add_row(row!["Idx", "Name", "Addr", "Size", "Offset", "Align", "RelOff", "Nreloc", "Flags"]);
 
                     for (i, entry) in entry.sects.iter().enumerate() {
                         if i == self.opt.trim_lines {
@@ -904,11 +904,12 @@ impl super::FileFormat for MachO {
                             Fr->format!("{:#X}", entry.addr),
                             Fg->format!("{:#X}", entry.size),
                             Fy->format!("{:#X}", entry.offset),
-                            Fg->format!("{:#X}", entry.size),
                             format!("{:#X}", entry.align),
                             format!("{:#X}", entry.reloff),
                             Fmr->entry.n_reloc,
-                            format!("{:#X}", entry.flags),
+                            format!("{} {}",
+                                    Color::Blue.paint(section_type_to_str(entry.flags)),
+                                    section_attr_to_str(entry.flags))
                         ]);
                     }
                     table.printstd();
