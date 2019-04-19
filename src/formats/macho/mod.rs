@@ -355,13 +355,50 @@ impl From<Routines_command_32> for Routines_command {
     }
 }
 
-#[derive(Debug, Pread)]
+#[derive(Debug, Pread, Clone)]
 struct Symtab_command {
     cmd:     Load_command,
     sym_off: u32,
     n_syms:  u32,
     str_off: u32,
     str_sz:  u32,
+}
+
+#[derive(Debug, Pread)]
+struct Nlist_32 {
+    n_un:    u32,
+    n_type:  u8,
+    n_sect:  u8,
+    n_desc:  u16,
+    n_value: u32,
+}
+
+#[derive(Debug, Pread)]
+struct Nlist {
+    n_un:    u32,
+    n_type:  u8,
+    n_sect:  u8,
+    n_desc:  u16,
+    n_value: u64,
+}
+
+impl From<Nlist_32> for Nlist {
+    fn from(list: Nlist_32) -> Self {
+        Nlist {
+            n_un:    list.n_un,
+            n_type:  list.n_type,
+            n_sect:  list.n_sect,
+            n_desc:  list.n_desc,
+            n_value: list.n_value as u64,
+        }
+    }
+}
+
+#[derive(Debug)]
+struct Symtab {
+    header: Symtab_command,
+    syms:   Vec<Nlist>,
+    strs:   Vec<u8>,
 }
 
 #[derive(Debug, Pread)]
@@ -647,12 +684,13 @@ struct Note_command {
 
 #[derive(Debug)]
 pub struct MachO {
-    opt: Opt,
+    opt:      Opt,
 
-    header: Mach_header,
+    header:   Mach_header,
     commands: Vec<LoadCommand>,
 
     segments: Vec<Segment>,
+    symtab:   Option<Symtab>,
 }
 
 impl super::FileFormat for MachO {
@@ -687,6 +725,7 @@ impl super::FileFormat for MachO {
 
         let mut commands = Vec::with_capacity(header.n_cmds as usize);
         let mut segments = Vec::new();
+        let mut symtab   = None;
 
         for i in 0..header.n_cmds {
             let cmd = buf.pread_with::<u32>(*offset, endianess)?;
@@ -744,7 +783,15 @@ impl super::FileFormat for MachO {
                     LoadCommand::Routines(cmd, buf.pread_with::<Routines_command>(*offset, endianess)?)
                 },
                 LC_SYMTAB => {
-                    LoadCommand::SymTab(cmd, buf.pread_with(*offset, endianess)?)
+                    let header = buf.pread_with::<Symtab_command>(*offset, endianess)?;
+                    let mut syms = Vec::with_capacity(header.n_syms as usize);
+                    for i in 0..header.n_syms as usize {
+                        if is_64bit { syms.push(buf.pread_with::<Nlist>(header.sym_off as usize + (i * 16), endianess)?); }
+                        else { syms.push(Nlist::from(buf.pread_with::<Nlist_32>(header.sym_off as usize + (i * 12), endianess)?)); }
+                    }
+                    let strs = buf[header.str_off as usize..header.str_off as usize + header.str_sz as usize].to_vec();
+                    symtab = Some(Symtab { header: header.clone(), syms, strs });
+                    LoadCommand::SymTab(cmd, header)
                 },
                 LC_DYSYMTAB => {
                     LoadCommand::DySymTab(cmd, buf.pread_with(*offset, endianess)?)
@@ -814,7 +861,9 @@ impl super::FileFormat for MachO {
 
             header,
             commands,
+
             segments,
+            symtab,
         })
 
     }
@@ -823,7 +872,8 @@ impl super::FileFormat for MachO {
         use ansi_term::Color;
         use prettytable::Table;
 
-        println!("{:#X?}", self);
+        println!("{:#X?}", self.commands);
+        println!("{:#X?}", self.symtab);
 
         //
         // MACH-O FILE
@@ -916,6 +966,44 @@ impl super::FileFormat for MachO {
                     if trimmed {
                         fmt_indentln(format!("Output trimmed..."));
                     }
+                }
+                println!();
+            }
+        }
+
+        //
+        // SYMBOLS
+        //
+        if let Some(symtab) = &self.symtab {
+            println!("{}({})",
+                     Color::White.underline().paint("Symbols"),
+                     symtab.syms.len());
+
+            if symtab.syms.len() >= 1 {
+
+                let mut trimmed = false;
+                let mut table = Table::new();
+                let format = prettytable::format::FormatBuilder::new()
+                    .borders(' ')
+                    .column_separator(' ')
+                    .padding(1, 1)
+                    .build();
+                table.set_format(format);
+                table.add_row(row!["Idx", "Name"]);
+
+                for (i, entry) in symtab.syms.iter().enumerate() {
+                    if i == self.opt.trim_lines {
+                        trimmed = true;
+                        break;
+                    }
+                    table.add_row(row![
+                        i,
+                        Fy->symtab.strs.pread::<&str>(entry.n_un as usize)?,
+                    ]);
+                }
+                table.printstd();
+                if trimmed {
+                    fmt_indentln(format!("Output trimmed..."));
                 }
                 println!();
             }
