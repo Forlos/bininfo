@@ -233,7 +233,7 @@ impl From<Section_32> for Section {
 
 #[derive(Debug, Pread)]
 struct Fvmlib {
-    lc_str: u64,
+    lc_str: u32,
     minor_ver: u32,
     header_adr: u32,
 }
@@ -246,7 +246,7 @@ struct Fvmlib_command {
 
 #[derive(Debug, Pread)]
 struct Dylib {
-    lc_str:    u64,
+    lc_str:    u32,
     timestamp: u32,
     cur_ver:   u32,
     comp_ver:  u32,
@@ -261,39 +261,39 @@ struct Dylib_command {
 #[derive(Debug, Pread)]
 struct Sub_framework_command {
     cmd: Load_command,
-    lc_str: u64,
+    lc_str: u32,
 }
 
 #[derive(Debug, Pread)]
 struct Sub_client_command {
     cmd: Load_command,
-    lc_str: u64,
+    lc_str: u32,
 }
 
 #[derive(Debug, Pread)]
 struct Sub_umbrella_command {
     cmd: Load_command,
-    lc_str: u64,
+    lc_str: u32,
 }
 
 #[derive(Debug, Pread)]
 struct Sub_library_command {
     cmd: Load_command,
-    lc_str: u64,
+    lc_str: u32,
 }
 
 #[derive(Debug, Pread)]
 struct Prebound_dylib_command {
     cmd: Load_command,
-    lc_str_name: u64,
+    lc_str_name: u32,
     n_modules: u32,
-    lc_str_mods: u64,
+    lc_str_mods: u32,
 }
 
 #[derive(Debug, Pread)]
 struct Dylinker_command {
     cmd: Load_command,
-    lc_str: u64,
+    lc_str: u32,
 }
 
 #[derive(Debug, Pread)]
@@ -565,7 +565,7 @@ struct UUID_command {
 #[derive(Debug, Pread)]
 struct Rpath_command {
     cmd:    Load_command,
-    lc_str: u64,
+    lc_str: u32,
 }
 
 #[derive(Debug, Pread)]
@@ -669,7 +669,7 @@ struct Ident_command {
 #[derive(Debug, Pread)]
 struct Fvmfile_command {
     cmd:         Load_command,
-    lc_str:      u64,
+    lc_str:      u32,
     header_addr: u32,
 }
 
@@ -708,6 +708,7 @@ pub struct MachO {
     dysymtab: Option<Dysymtab_command>,
 
     relocs:   Vec<Relocation>,
+    libs:     Vec<String>,
 }
 
 impl super::FileFormat for MachO {
@@ -748,6 +749,7 @@ impl super::FileFormat for MachO {
         let mut dysymtab = None;
 
         let mut relocs   = Vec::new();
+        let mut libs     = Vec::new();
 
         for i in 0..header.n_cmds {
             let cmd = buf.pread_with::<u32>(*offset, endianess)?;
@@ -793,7 +795,9 @@ impl super::FileFormat for MachO {
                     LoadCommand::Fvmlib(cmd, buf.pread_with(*offset, endianess)?)
                 },
                 LC_ID_DYLIB | LC_LOAD_DYLIB | LC_LOAD_WEAK_DYLIB | LC_REEXPORT_DYLIB => {
-                    LoadCommand::Dylib(cmd, buf.pread_with(*offset, endianess)?)
+                    let dylib = buf.pread_with::<Dylib_command>(*offset, endianess)?;
+                    libs.push(buf.pread::<&str>(*offset + dylib.dylib.lc_str as usize)?.to_string());
+                    LoadCommand::Dylib(cmd, dylib)
                 },
                 LC_SUB_FRAMEWORK => {
                     LoadCommand::SubFramework(cmd, buf.pread_with(*offset, endianess)?)
@@ -905,7 +909,6 @@ impl super::FileFormat for MachO {
                 _ => return Err(Error::from(Problem::Msg(format!("Invalid/Unsupported command type: {} at: {:#X}", cmd, *offset)))),
             });
             *offset += cmd_sz as usize;
-            println!("{:#X?}", commands[i as usize]);
         }
 
         Ok(MachO {
@@ -921,6 +924,7 @@ impl super::FileFormat for MachO {
             dysymtab,
 
             relocs,
+            libs,
         })
 
     }
@@ -1093,6 +1097,20 @@ impl super::FileFormat for MachO {
             if let Some(symtab) = &self.symtab {
                 fmt_macho_reloc(&self.relocs, symtab, &self.sections, self.opt.trim_lines)?;
             }
+        }
+
+        //
+        // LIBRARIES
+        //
+        if self.libs.len() >= 1 {
+            println!("{}({})",
+                     Color::White.underline().paint("Libraries"),
+                     self.libs.len());
+
+            for lib in &self.libs {
+                println!("{}", Color::Blue.paint(lib));
+            }
+
         }
 
         Ok(())

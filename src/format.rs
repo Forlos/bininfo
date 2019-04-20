@@ -521,6 +521,8 @@ pub fn fmt_macho_syms(syms: &[Nlist], strs: &Vec<u8>, secs: &Vec<Section>, trim_
 
 }
 
+//TODO This needs fixing for 32bit object files
+// https://opensource.apple.com/source/xnu/xnu-4903.221.2/EXTERNAL_HEADERS/mach-o/reloc.h.auto.html
 pub fn fmt_macho_reloc(relocs: &Vec<Relocation>, syms: &Symtab, secs: &Vec<Section>, trim_lines: usize) -> Result<(), Error>{
     use ansi_term::Color;
 
