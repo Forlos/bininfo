@@ -5,7 +5,7 @@ use scroll::{self, Pread};
 
 use crate::Opt;
 use crate::Problem;
-use crate::format::{fmt_macho, fmt_indentln};
+use crate::format::{fmt_macho, fmt_macho_syms, fmt_indentln};
 
 pub const MACHO_MAGIC_32: &'static [u8; MACHO_MAGIC_SIZE] = b"\xFE\xED\xFA\xCE";
 pub const MACHO_MAGIC_64: &'static [u8; MACHO_MAGIC_SIZE] = b"\xFE\xED\xFA\xCF";
@@ -296,12 +296,12 @@ struct Dylinker_command {
     lc_str: u64,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Pread)]
 struct Thread_command {
     cmd: Load_command,
     flavor: u32,
     cnt: u32,
-    state: ThreadState,
+    // state: ThreadState,
 }
 
 #[derive(Debug)]
@@ -374,12 +374,12 @@ struct Nlist_32 {
 }
 
 #[derive(Debug, Pread)]
-struct Nlist {
-    n_un:    u32,
-    n_type:  u8,
-    n_sect:  u8,
-    n_desc:  u16,
-    n_value: u64,
+pub struct Nlist {
+    pub n_un:    u32,
+    pub n_type:  u8,
+    pub n_sect:  u8,
+    pub n_desc:  u16,
+    pub n_value: u64,
 }
 
 impl From<Nlist_32> for Nlist {
@@ -401,7 +401,7 @@ struct Symtab {
     strs:   Vec<u8>,
 }
 
-#[derive(Debug, Pread)]
+#[derive(Debug, Pread, Clone)]
 struct Dysymtab_command {
     cmd: Load_command,
 
@@ -410,7 +410,7 @@ struct Dysymtab_command {
     ext_def_sym_idx: u32,
     ext_def_sym_n: u32,
     undef_sym_idx: u32,
-    under_sym_n: u32,
+    undef_sym_n: u32,
 
     toc_off: u32,
     toc_n: u32,
@@ -636,9 +636,9 @@ struct Dyld_info_command {
 
 #[derive(Debug)]
 struct Linker_option_command {
-    cmd:     Load_command,
-    cnt:     u32,
-    strings: Vec<String>,
+    cmd:  Load_command,
+    cnt:  u32,
+    strs: Vec<String>,
 }
 
 #[derive(Debug, Pread)]
@@ -650,8 +650,8 @@ struct Symseg_command {
 
 #[derive(Debug)]
 struct Ident_command {
-    cmd:     Load_command,
-    strings: Vec<String>,
+    cmd:  Load_command,
+    strs: Vec<u8>,
 }
 
 #[derive(Debug, Pread)]
@@ -691,6 +691,7 @@ pub struct MachO {
 
     segments: Vec<Segment>,
     symtab:   Option<Symtab>,
+    dysymtab: Option<Dysymtab_command>,
 }
 
 impl super::FileFormat for MachO {
@@ -726,6 +727,7 @@ impl super::FileFormat for MachO {
         let mut commands = Vec::with_capacity(header.n_cmds as usize);
         let mut segments = Vec::new();
         let mut symtab   = None;
+        let mut dysymtab = None;
 
         for i in 0..header.n_cmds {
             let cmd = buf.pread_with::<u32>(*offset, endianess)?;
@@ -773,9 +775,9 @@ impl super::FileFormat for MachO {
                 LC_ID_DYLINKER | LC_LOAD_DYLINKER | LC_DYLD_ENVIRONMENT => {
                     LoadCommand::Dylinker(cmd, buf.pread_with(*offset, endianess)?)
                 },
-                // LC_THREAD | LC_UNIXTHREAD => {
-                //     LoadCommand::Thread(cmd, buf.pread_with(*offset, endianess)?)
-                // },
+                LC_THREAD | LC_UNIXTHREAD => {
+                    LoadCommand::Thread(cmd, buf.pread_with(*offset, endianess)?)
+                },
                 LC_ROUTINES => {
                     LoadCommand::Routines(cmd, Routines_command::from(buf.pread_with::<Routines_command_32>(*offset, endianess)?))
                 },
@@ -794,7 +796,9 @@ impl super::FileFormat for MachO {
                     LoadCommand::SymTab(cmd, header)
                 },
                 LC_DYSYMTAB => {
-                    LoadCommand::DySymTab(cmd, buf.pread_with(*offset, endianess)?)
+                    let dy = buf.pread_with::<Dysymtab_command>(*offset, endianess)?;
+                    dysymtab = Some(dy.clone());
+                    LoadCommand::DySymTab(cmd, dy)
                 },
                 LC_TWOLEVEL_HINTS => {
                     LoadCommand::TwolevelHints(cmd, buf.pread_with(*offset, endianess)?)
@@ -829,15 +833,25 @@ impl super::FileFormat for MachO {
                 LC_DYLD_INFO | LC_DYLD_INFO_ONLY => {
                     LoadCommand::DyldInfo(cmd, buf.pread_with(*offset, endianess)?)
                 },
-                // LC_LINKER_OPTION => {
-                //     LoadCommand::LinkerOption(cmd, buf.pread_with(*offset, endianess)?)
-                // },
+                LC_LINKER_OPTION => {
+                    let comm = buf.pread_with::<Load_command>(*offset, endianess)?;
+                    let cnt  = buf.pread_with::<u32>(*offset + 8, endianess)?;
+                    let mut strs = Vec::with_capacity(cnt as usize);
+                    let stroff = &mut 0_usize;
+                    *stroff += *offset + 12;
+                    for _ in 0..cnt as usize {
+                        strs.push(buf.gread::<&str>(stroff)?.to_string());
+                    }
+                    LoadCommand::LinkerOption(cmd, Linker_option_command { cmd: comm, cnt, strs })
+                },
                 LC_SYMSEG => {
                     LoadCommand::Symseg(cmd, buf.pread_with(*offset, endianess)?)
                 },
-                // LC_IDENT => {
-                //     LoadCommand::Ident(cmd, buf.pread_with(*offset, endianess)?)
-                // }
+                LC_IDENT => {
+                    let comm = buf.pread_with::<Load_command>(*offset, endianess)?;
+                    let strs = buf[*offset + 8..*offset + 8 + comm.cmd_sz as usize].to_vec();
+                    LoadCommand::Ident(cmd, Ident_command { cmd: comm, strs } )
+                }
                 LC_FVMFILE => {
                     LoadCommand::FvmFile(cmd, buf.pread_with(*offset, endianess)?)
                 },
@@ -864,6 +878,7 @@ impl super::FileFormat for MachO {
 
             segments,
             symtab,
+            dysymtab,
         })
 
     }
@@ -938,10 +953,10 @@ impl super::FileFormat for MachO {
                     let format = prettytable::format::FormatBuilder::new()
                         .borders(' ')
                         .column_separator(' ')
-                        .padding(3, 0)
+                        .padding(1, 1)
                         .build();
                     table.set_format(format);
-                    table.add_row(row!["Idx", "Name", "Addr", "Size", "Offset", "Align", "RelOff", "Nreloc", "Flags"]);
+                    table.add_row(row!["","Idx", "Name", "Addr", "Size", "Offset", "Align", "RelOff", "Nreloc", "Flags"]);
 
                     for (i, entry) in entry.sects.iter().enumerate() {
                         if i == self.opt.trim_lines {
@@ -949,6 +964,7 @@ impl super::FileFormat for MachO {
                             break;
                         }
                         table.add_row(row![
+                            "",
                             i,
                             std::str::from_utf8(&entry.sect_name)?,
                             Fr->format!("{:#X}", entry.addr),
@@ -979,33 +995,45 @@ impl super::FileFormat for MachO {
                      Color::White.underline().paint("Symbols"),
                      symtab.syms.len());
 
-            if symtab.syms.len() >= 1 {
-
-                let mut trimmed = false;
-                let mut table = Table::new();
-                let format = prettytable::format::FormatBuilder::new()
-                    .borders(' ')
-                    .column_separator(' ')
-                    .padding(1, 1)
-                    .build();
-                table.set_format(format);
-                table.add_row(row!["Idx", "Name"]);
-
-                for (i, entry) in symtab.syms.iter().enumerate() {
-                    if i == self.opt.trim_lines {
-                        trimmed = true;
-                        break;
-                    }
-                    table.add_row(row![
-                        i,
-                        Fy->symtab.strs.pread::<&str>(entry.n_un as usize)?,
-                    ]);
-                }
-                table.printstd();
-                if trimmed {
-                    fmt_indentln(format!("Output trimmed..."));
-                }
+            if let Some(dysymtab) = &self.dysymtab {
+                //
+                // LOCAL SYMBOLS
+                //
                 println!();
+                fmt_indentln(format!("{}({})",
+                                     Color::Fixed(75).underline().paint("LocalSymbols"),
+                                     dysymtab.local_sym_n));
+                fmt_macho_syms(&symtab.syms[dysymtab.local_sym_idx as usize
+                                            ..dysymtab.local_sym_idx as usize + dysymtab.local_sym_n as usize],
+                               &symtab.strs,
+                               self.opt.trim_lines)?;
+
+                //
+                // EXTERNAL SYMBOLS
+                //
+                fmt_indentln(format!("{}({})",
+                                     Color::Fixed(75).underline().paint("ExternalSymbols"),
+                                     dysymtab.ext_def_sym_n));
+                fmt_macho_syms(&symtab.syms[dysymtab.ext_def_sym_idx as usize
+                                            ..dysymtab.ext_def_sym_idx as usize + dysymtab.ext_def_sym_n as usize],
+                               &symtab.strs,
+                               self.opt.trim_lines)?;
+
+                //
+                // UNDEFINED SYMBOLS
+                //
+                fmt_indentln(format!("{}({})",
+                                     Color::Fixed(75).underline().paint("UndefinedSymbols"),
+                                     dysymtab.undef_sym_n));
+                fmt_macho_syms(&symtab.syms[dysymtab.undef_sym_idx as usize
+                                            ..dysymtab.undef_sym_idx as usize + dysymtab.undef_sym_n as usize],
+                               &symtab.strs,
+                               self.opt.trim_lines)?;
+
+            }
+
+            else  {
+                fmt_macho_syms(&symtab.syms, &symtab.strs, self.opt.trim_lines)?;
             }
         }
 

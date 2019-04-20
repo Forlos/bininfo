@@ -460,7 +460,7 @@ pub fn fmt_pe(header: &COFF_header) {
 }
 
 use crate::formats::macho::{
-    Mach_header,
+    Mach_header, Nlist,
     mach_is_exe, mach_is_lib,
 };
 
@@ -476,5 +476,38 @@ pub fn fmt_macho(header: &Mach_header) {
         print!("{} ", Color::Red.paint("EXECUTE"))
     }
     println!();
+
+}
+
+pub fn fmt_macho_syms(syms: &[Nlist], strs: &Vec<u8>, trim_lines: usize) -> Result<(), Error> {
+
+    let mut trimmed = false;
+    let mut table = Table::new();
+    let format = prettytable::format::FormatBuilder::new()
+        .borders(' ')
+        .column_separator(' ')
+        .padding(1, 1)
+        .build();
+    table.set_format(format);
+    table.add_row(row![" ", "Idx", "Name"]);
+
+    for (i, entry) in syms.iter().enumerate() {
+        if i == trim_lines {
+            trimmed = true;
+            break;
+        }
+        table.add_row(row![
+            " ",
+            i,
+            Fy->strs.pread::<&str>(entry.n_un as usize)?,
+        ]);
+    }
+    table.printstd();
+    if trimmed {
+        fmt_indentln(format!("Output trimmed..."));
+    }
+    println!();
+
+    Ok(())
 
 }
