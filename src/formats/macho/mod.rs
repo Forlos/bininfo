@@ -5,7 +5,7 @@ use scroll::{self, Pread};
 
 use crate::Opt;
 use crate::Problem;
-use crate::format::{fmt_macho, fmt_macho_syms, fmt_indentln};
+use crate::format::{fmt_macho, fmt_macho_syms, fmt_macho_reloc, fmt_indentln};
 
 pub const MACHO_MAGIC_32: &'static [u8; MACHO_MAGIC_SIZE] = b"\xFE\xED\xFA\xCE";
 pub const MACHO_MAGIC_64: &'static [u8; MACHO_MAGIC_SIZE] = b"\xFE\xED\xFA\xCF";
@@ -181,7 +181,7 @@ struct Segment {
     sects:  Vec<Section>,
 }
 
-#[derive(Debug, Pread)]
+#[derive(Debug, Pread, Clone)]
 struct Section_32 {
     sect_name: [u8; 16],
     seg_name:  [u8; 16],
@@ -196,10 +196,10 @@ struct Section_32 {
     reserved2: u32,
 }
 
-#[derive(Debug, Pread)]
-struct Section {
-    sect_name: [u8; 16],
-    seg_name:  [u8; 16],
+#[derive(Debug, Pread, Clone)]
+pub struct Section {
+    pub sect_name: [u8; 16],
+    pub seg_name:  [u8; 16],
     addr:      u64,
     size:      u64,
     offset:    u32,
@@ -395,10 +395,10 @@ impl From<Nlist_32> for Nlist {
 }
 
 #[derive(Debug)]
-struct Symtab {
+pub struct Symtab {
     header: Symtab_command,
-    syms:   Vec<Nlist>,
-    strs:   Vec<u8>,
+    pub syms:   Vec<Nlist>,
+    pub strs:   Vec<u8>,
 }
 
 #[derive(Debug, Pread, Clone)]
@@ -429,6 +429,18 @@ struct Dysymtab_command {
 
     loc_rel_off: u32,
     loc_ref_n: u32,
+}
+
+#[derive(Debug, Pread)]
+pub struct Relocation_info {
+    pub addr: u32,
+    pub sym: u32,
+}
+
+#[derive(Debug)]
+pub struct Relocation {
+    pub sec:  Section,
+    pub info: Vec<Relocation_info>,
 }
 // * a table of contents entry
 #[derive(Debug, Pread)]
@@ -690,8 +702,12 @@ pub struct MachO {
     commands: Vec<LoadCommand>,
 
     segments: Vec<Segment>,
+    sections: Vec<Section>,
+
     symtab:   Option<Symtab>,
     dysymtab: Option<Dysymtab_command>,
+
+    relocs:   Vec<Relocation>,
 }
 
 impl super::FileFormat for MachO {
@@ -726,8 +742,12 @@ impl super::FileFormat for MachO {
 
         let mut commands = Vec::with_capacity(header.n_cmds as usize);
         let mut segments = Vec::new();
+        let mut sections = Vec::new();
+
         let mut symtab   = None;
         let mut dysymtab = None;
+
+        let mut relocs   = Vec::new();
 
         for i in 0..header.n_cmds {
             let cmd = buf.pread_with::<u32>(*offset, endianess)?;
@@ -737,7 +757,16 @@ impl super::FileFormat for MachO {
                     let segment = Segment_command::from(buf.pread_with::<Segment_command_32>(*offset, endianess)?);
                     let mut sects   = Vec::with_capacity(segment.n_sects as usize);
                     for i in 0..segment.n_sects as usize {
-                        sects.push(Section::from(buf.pread_with::<Section_32>(*offset + 56 + (i * 68), endianess)?));
+                        let sec = Section::from(buf.pread_with::<Section_32>(*offset + 56 + (i * 68), endianess)?);
+                        let mut info = Vec::with_capacity(sec.n_reloc as usize);
+                        for j in 0..sec.n_reloc as usize {
+                            info.push(buf.pread_with(sec.reloff as usize + (j * 8), endianess)?);
+                        }
+                        if info.len() >= 1 {
+                            relocs.push( Relocation { sec: sec.clone(), info, } );
+                        }
+                        sections.push(sec.clone());
+                        sects.push(sec);
                     }
                     segments.push(Segment { header: segment.clone(), sects });
                     LoadCommand::Segment(cmd, segment)
@@ -746,7 +775,16 @@ impl super::FileFormat for MachO {
                     let segment = buf.pread_with::<Segment_command>(*offset, endianess)?;
                     let mut sects   = Vec::with_capacity(segment.n_sects as usize);
                     for i in 0..segment.n_sects as usize {
-                        sects.push(buf.pread_with::<Section>(*offset + 72 + (i * 80), endianess)?);
+                        let sec = buf.pread_with::<Section>(*offset + 72 + (i * 80), endianess)?;
+                        let mut info = Vec::with_capacity(sec.n_reloc as usize);
+                        for j in 0..sec.n_reloc as usize {
+                            info.push(buf.pread_with(sec.reloff as usize + (j * 8), endianess)?);
+                        }
+                        if info.len() >= 1 {
+                            relocs.push( Relocation { sec: sec.clone(), info, } );
+                        }
+                        sections.push(sec.clone());
+                        sects.push(sec);
                     }
                     segments.push(Segment { header: segment.clone(), sects });
                     LoadCommand::Segment(cmd, segment)
@@ -877,8 +915,12 @@ impl super::FileFormat for MachO {
             commands,
 
             segments,
+            sections,
+
             symtab,
             dysymtab,
+
+            relocs,
         })
 
     }
@@ -886,9 +928,6 @@ impl super::FileFormat for MachO {
     fn print(&self) -> Result<(), Error> {
         use ansi_term::Color;
         use prettytable::Table;
-
-        println!("{:#X?}", self.commands);
-        println!("{:#X?}", self.symtab);
 
         //
         // MACH-O FILE
@@ -938,7 +977,7 @@ impl super::FileFormat for MachO {
         if self.segments.len() >= 1 {
             println!("{}({})",
                      Color::White.underline().paint("Segments"),
-                     self.commands.len());
+                     self.segments.len());
 
             for entry in &self.segments {
 
@@ -948,6 +987,9 @@ impl super::FileFormat for MachO {
 
                 if entry.sects.len() >= 1 {
 
+                    //
+                    // SECTIONS
+                    //
                     let mut trimmed = false;
                     let mut table = Table::new();
                     let format = prettytable::format::FormatBuilder::new()
@@ -1006,6 +1048,7 @@ impl super::FileFormat for MachO {
                 fmt_macho_syms(&symtab.syms[dysymtab.local_sym_idx as usize
                                             ..dysymtab.local_sym_idx as usize + dysymtab.local_sym_n as usize],
                                &symtab.strs,
+                               &self.sections,
                                self.opt.trim_lines)?;
 
                 //
@@ -1017,6 +1060,7 @@ impl super::FileFormat for MachO {
                 fmt_macho_syms(&symtab.syms[dysymtab.ext_def_sym_idx as usize
                                             ..dysymtab.ext_def_sym_idx as usize + dysymtab.ext_def_sym_n as usize],
                                &symtab.strs,
+                               &self.sections,
                                self.opt.trim_lines)?;
 
                 //
@@ -1028,12 +1072,26 @@ impl super::FileFormat for MachO {
                 fmt_macho_syms(&symtab.syms[dysymtab.undef_sym_idx as usize
                                             ..dysymtab.undef_sym_idx as usize + dysymtab.undef_sym_n as usize],
                                &symtab.strs,
+                               &self.sections,
                                self.opt.trim_lines)?;
 
             }
 
             else  {
-                fmt_macho_syms(&symtab.syms, &symtab.strs, self.opt.trim_lines)?;
+                fmt_macho_syms(&symtab.syms, &symtab.strs, &self.sections, self.opt.trim_lines)?;
+            }
+        }
+
+        //
+        // RELOCATIONS
+        //
+        if self.relocs.len() >= 1 {
+            println!("{}({})",
+                     Color::White.underline().paint("Relocations"),
+                     self.relocs.len());
+
+            if let Some(symtab) = &self.symtab {
+                fmt_macho_reloc(&self.relocs, symtab, &self.sections, self.opt.trim_lines)?;
             }
         }
 

@@ -460,7 +460,7 @@ pub fn fmt_pe(header: &COFF_header) {
 }
 
 use crate::formats::macho::{
-    Mach_header, Nlist,
+    Mach_header, Nlist, Section, Relocation, Symtab,
     mach_is_exe, mach_is_lib,
 };
 
@@ -479,7 +479,7 @@ pub fn fmt_macho(header: &Mach_header) {
 
 }
 
-pub fn fmt_macho_syms(syms: &[Nlist], strs: &Vec<u8>, trim_lines: usize) -> Result<(), Error> {
+pub fn fmt_macho_syms(syms: &[Nlist], strs: &Vec<u8>, secs: &Vec<Section>, trim_lines: usize) -> Result<(), Error> {
 
     let mut trimmed = false;
     let mut table = Table::new();
@@ -489,22 +489,112 @@ pub fn fmt_macho_syms(syms: &[Nlist], strs: &Vec<u8>, trim_lines: usize) -> Resu
         .padding(1, 1)
         .build();
     table.set_format(format);
-    table.add_row(row![" ", "Idx", "Name"]);
+    table.add_row(row![" ", "Idx", "Name", "Section"]);
 
     for (i, entry) in syms.iter().enumerate() {
         if i == trim_lines {
             trimmed = true;
             break;
         }
+
+        let mut sect = String::from("NONE");
+        if entry.n_sect > 0 {
+        sect = format!("{}.{}" ,
+                       std::str::from_utf8(&secs[entry.n_sect as usize - 1].seg_name)?,
+                       std::str::from_utf8(&secs[entry.n_sect as usize - 1].sect_name)?);
+        }
+
         table.add_row(row![
             " ",
             i,
             Fy->strs.pread::<&str>(entry.n_un as usize)?,
+            sect,
         ]);
     }
     table.printstd();
     if trimmed {
         fmt_indentln(format!("Output trimmed..."));
+    }
+    println!();
+
+    Ok(())
+
+}
+
+pub fn fmt_macho_reloc(relocs: &Vec<Relocation>, syms: &Symtab, secs: &Vec<Section>, trim_lines: usize) -> Result<(), Error>{
+    use ansi_term::Color;
+
+    for reloc in relocs {
+
+        println!();
+        fmt_indentln(format!("{}.{}({})",
+                             Color::Fixed(75).paint(std::str::from_utf8(&reloc.sec.seg_name)?),
+                             Color::Fixed(75).paint(std::str::from_utf8(&reloc.sec.sect_name)?),
+                             reloc.info.len()));
+
+        let mut trimmed = false;
+        let mut table = Table::new();
+        let format = prettytable::format::FormatBuilder::new()
+            .borders(' ')
+            .column_separator(' ')
+            .padding(1, 1)
+            .build();
+        table.set_format(format);
+        table.add_row(row![" ", "Idx", "Offset", "Type", "Extern", "Length", "PIC", "SymbolNum", "Symbol"]);
+
+        for (i, entry) in reloc.info.iter().enumerate() {
+            if i == trim_lines {
+                trimmed = true;
+                break;
+            }
+
+            let r_type   = entry.sym >> 28;
+            let r_extern = entry.sym << 4 >> 31 == 1;
+            let r_length = entry.sym << 5 >> 30;
+            let r_pcrel  = entry.sym << 7 >> 31 == 1;
+            let r_sym    = entry.sym << 8 >> 8;
+
+            let mut sym = String::new();
+            if r_extern { sym = syms.strs.pread::<&str>(syms.syms[r_sym as usize].n_un as usize)?.to_string()  }
+            else {
+                if r_sym >= 1 {
+                    sym.push_str(std::str::from_utf8(&secs[r_sym as usize - 1].seg_name)?);
+                    sym.push('.');
+                    sym.push_str(std::str::from_utf8(&secs[r_sym as usize - 1].sect_name)?);
+                }
+                else {
+                    sym.push_str("NONE");
+                }
+            }
+
+            let extern_cell = if r_extern {
+                Color::Green.paint("true")
+            } else {
+                Color::Red.paint("false")
+            };
+
+            let pcrel_cell = if r_pcrel {
+                Color::Green.paint("true")
+            } else {
+                Color::Red.paint("false")
+            };
+
+            table.add_row(row![
+                " ",
+                i,
+                Fr->format!("{:#X}", entry.addr),
+                r_type,
+                extern_cell,
+                Fgr->r_length,
+                pcrel_cell,
+                Fmr->r_sym,
+                Fy->sym,
+            ]);
+        }
+        table.printstd();
+        if trimmed {
+            fmt_indentln(format!("Output trimmed..."));
+        }
     }
     println!();
 
