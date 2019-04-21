@@ -49,5 +49,10 @@ Warning: Error handling is very basic and hasn't been tested.
 - http://www.libpng.org/pub/png/pngsuite.html
 - http://www.libpng.org/pub/png/png-sitemap.html#images
 
+### Zip
+- https://pkware.cachefly.net/webdocs/casestudies/APPNOTE.TXT
+
 ### Other
 - https://github.com/corkami
+- https://en.wikipedia.org/wiki/List_of_file_signatures
+- http://fileformats.archiveteam.org/wiki/Main_Page

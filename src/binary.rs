@@ -20,6 +20,7 @@ pub enum Binary {
     Lua(lua::Lua),
 
     Xp3(xp3::Xp3),
+    Zip(zip::Zip),
 
     Pdf(pdf::Pdf),
 
@@ -45,6 +46,7 @@ impl Binary {
             Format::Lua => Ok(Binary::Lua(lua::Lua::parse(opt, buf)?)),
 
             Format::Xp3 => Ok(Binary::Xp3(xp3::Xp3::parse(opt, buf)?)),
+            Format::Zip => Ok(Binary::Zip(zip::Zip::parse(opt, buf)?)),
 
             Format::Pdf => Ok(Binary::Pdf(pdf::Pdf::parse(opt, buf)?)),
 

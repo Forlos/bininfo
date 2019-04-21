@@ -22,6 +22,7 @@ pub enum Format {
     Lua,
     // Archive formats
     Xp3,
+    Zip,
     // Document formats
     Pdf,
     // Other
@@ -81,11 +82,16 @@ fn check_magic(magic: &[u8; MAGIC_SIZE]) -> Result<Format, Error> {
         || &magic[0..macho::MACHO_MAGIC_SIZE] == macho::MACHO_MAGIC_64
         || &magic[0..macho::MACHO_MAGIC_SIZE] == macho::MACHO_MAGIC_32_R
         || &magic[0..macho::MACHO_MAGIC_SIZE] == macho::MACHO_MAGIC_64_R {
-        Ok(Format::MachO)
-    }
+            Ok(Format::MachO)
+        }
     else if &magic[0..lua::LUA_MAGIC_SIZE] == lua::LUA_MAGIC {
         Ok(Format::Lua)
     }
+    else if &magic[0..zip::ZIP_MAGIC_SIZE] == zip::ZIP_MAGIC
+        || &magic[0..zip::ZIP_MAGIC_SIZE] == zip::ZIP_MAGIC_EMPTY
+        || &magic[0..zip::ZIP_MAGIC_SIZE] == zip::ZIP_MAGIC_SPANNED {
+            Ok(Format::Zip)
+        }
     else {
         Ok(Format::Unknown)
     }
