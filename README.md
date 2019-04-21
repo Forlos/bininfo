@@ -34,6 +34,10 @@ Warning: Error handling is very basic and hasn't been tested.
 ### JavaClass
 - https://docs.oracle.com/javase/specs/jvms/se11/html/jvms-4.html
 
+### Lua
+- http://files.catwell.info/misc/mirror/lua-5.2-bytecode-vm-dirk-laurie/lua52vm.html
+- http://luaforge.net/docman/83/98/ANoFrillsIntroToLua51VMInstructions.pdf
+
 ### Mach-O
 - https://opensource.apple.com/source/xnu/xnu-4903.221.2/EXTERNAL_HEADERS/mach-o/loader.h.auto.html
 - https://opensource.apple.com/source/xnu/xnu-4903.221.2/osfmk/mach/

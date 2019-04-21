@@ -723,7 +723,7 @@ impl super::FileFormat for MachO {
         const MH_MAGIC_64: u32 =  0xFEEDFACF;
         const MH_CIGAM_64: u32 =  0xCFFAEDFE;
 
-        let endianess = match buf.pread::<u32>(0)? {
+        let endianness = match buf.pread::<u32>(0)? {
             MH_MAGIC | MH_MAGIC_64 => scroll::LE,
             MH_CIGAM | MH_CIGAM_64 => scroll::BE,
             // This should never happen as header has been already checked
@@ -738,8 +738,8 @@ impl super::FileFormat for MachO {
 
         let offset = &mut 0;
         let header;
-        if is_64bit { header = buf.gread_with::<Mach_header>(offset, endianess)?; }
-        else { header = Mach_header::from(buf.gread_with::<Mach_header_32>(offset, endianess)?); }
+        if is_64bit { header = buf.gread_with::<Mach_header>(offset, endianness)?; }
+        else { header = Mach_header::from(buf.gread_with::<Mach_header_32>(offset, endianness)?); }
 
         let mut commands = Vec::with_capacity(header.n_cmds as usize);
         let mut segments = Vec::new();
@@ -752,17 +752,17 @@ impl super::FileFormat for MachO {
         let mut libs     = Vec::new();
 
         for i in 0..header.n_cmds {
-            let cmd = buf.pread_with::<u32>(*offset, endianess)?;
-            let cmd_sz = buf.pread_with::<u32>(*offset + 4, endianess)?;
+            let cmd = buf.pread_with::<u32>(*offset, endianness)?;
+            let cmd_sz = buf.pread_with::<u32>(*offset + 4, endianness)?;
             commands.push( match cmd {
                 LC_SEGMENT => {
-                    let segment = Segment_command::from(buf.pread_with::<Segment_command_32>(*offset, endianess)?);
+                    let segment = Segment_command::from(buf.pread_with::<Segment_command_32>(*offset, endianness)?);
                     let mut sects   = Vec::with_capacity(segment.n_sects as usize);
                     for i in 0..segment.n_sects as usize {
-                        let sec = Section::from(buf.pread_with::<Section_32>(*offset + 56 + (i * 68), endianess)?);
+                        let sec = Section::from(buf.pread_with::<Section_32>(*offset + 56 + (i * 68), endianness)?);
                         let mut info = Vec::with_capacity(sec.n_reloc as usize);
                         for j in 0..sec.n_reloc as usize {
-                            info.push(buf.pread_with(sec.reloff as usize + (j * 8), endianess)?);
+                            info.push(buf.pread_with(sec.reloff as usize + (j * 8), endianness)?);
                         }
                         if info.len() >= 1 {
                             relocs.push( Relocation { sec: sec.clone(), info, } );
@@ -774,13 +774,13 @@ impl super::FileFormat for MachO {
                     LoadCommand::Segment(cmd, segment)
                 },
                 LC_SEGMENT_64 => {
-                    let segment = buf.pread_with::<Segment_command>(*offset, endianess)?;
+                    let segment = buf.pread_with::<Segment_command>(*offset, endianness)?;
                     let mut sects   = Vec::with_capacity(segment.n_sects as usize);
                     for i in 0..segment.n_sects as usize {
-                        let sec = buf.pread_with::<Section>(*offset + 72 + (i * 80), endianess)?;
+                        let sec = buf.pread_with::<Section>(*offset + 72 + (i * 80), endianness)?;
                         let mut info = Vec::with_capacity(sec.n_reloc as usize);
                         for j in 0..sec.n_reloc as usize {
-                            info.push(buf.pread_with(sec.reloff as usize + (j * 8), endianess)?);
+                            info.push(buf.pread_with(sec.reloff as usize + (j * 8), endianness)?);
                         }
                         if info.len() >= 1 {
                             relocs.push( Relocation { sec: sec.clone(), info, } );
@@ -792,92 +792,92 @@ impl super::FileFormat for MachO {
                     LoadCommand::Segment(cmd, segment)
                 },
                 LC_IDFVMLIB | LC_LOADFVMLIB => {
-                    LoadCommand::Fvmlib(cmd, buf.pread_with(*offset, endianess)?)
+                    LoadCommand::Fvmlib(cmd, buf.pread_with(*offset, endianness)?)
                 },
                 LC_ID_DYLIB | LC_LOAD_DYLIB | LC_LOAD_WEAK_DYLIB | LC_REEXPORT_DYLIB => {
-                    let dylib = buf.pread_with::<Dylib_command>(*offset, endianess)?;
+                    let dylib = buf.pread_with::<Dylib_command>(*offset, endianness)?;
                     libs.push(buf.pread::<&str>(*offset + dylib.dylib.lc_str as usize)?.to_string());
                     LoadCommand::Dylib(cmd, dylib)
                 },
                 LC_SUB_FRAMEWORK => {
-                    LoadCommand::SubFramework(cmd, buf.pread_with(*offset, endianess)?)
+                    LoadCommand::SubFramework(cmd, buf.pread_with(*offset, endianness)?)
                 },
                 LC_SUB_CLIENT => {
-                    LoadCommand::SubClient(cmd, buf.pread_with(*offset, endianess)?)
+                    LoadCommand::SubClient(cmd, buf.pread_with(*offset, endianness)?)
                 },
                 LC_SUB_UMBRELLA => {
-                    LoadCommand::SubUmbrella(cmd, buf.pread_with(*offset, endianess)?)
+                    LoadCommand::SubUmbrella(cmd, buf.pread_with(*offset, endianness)?)
                 },
                 LC_SUB_LIBRARY => {
-                    LoadCommand::SubLibrary(cmd, buf.pread_with(*offset, endianess)?)
+                    LoadCommand::SubLibrary(cmd, buf.pread_with(*offset, endianness)?)
                 },
                 LC_PREBOUND_DYLIB => {
-                    LoadCommand::PreboundDylib(cmd, buf.pread_with(*offset,endianess)?)
+                    LoadCommand::PreboundDylib(cmd, buf.pread_with(*offset,endianness)?)
                 },
                 LC_ID_DYLINKER | LC_LOAD_DYLINKER | LC_DYLD_ENVIRONMENT => {
-                    LoadCommand::Dylinker(cmd, buf.pread_with(*offset, endianess)?)
+                    LoadCommand::Dylinker(cmd, buf.pread_with(*offset, endianness)?)
                 },
                 LC_THREAD | LC_UNIXTHREAD => {
-                    LoadCommand::Thread(cmd, buf.pread_with(*offset, endianess)?)
+                    LoadCommand::Thread(cmd, buf.pread_with(*offset, endianness)?)
                 },
                 LC_ROUTINES => {
-                    LoadCommand::Routines(cmd, Routines_command::from(buf.pread_with::<Routines_command_32>(*offset, endianess)?))
+                    LoadCommand::Routines(cmd, Routines_command::from(buf.pread_with::<Routines_command_32>(*offset, endianness)?))
                 },
                 LC_ROUTINES_64 => {
-                    LoadCommand::Routines(cmd, buf.pread_with::<Routines_command>(*offset, endianess)?)
+                    LoadCommand::Routines(cmd, buf.pread_with::<Routines_command>(*offset, endianness)?)
                 },
                 LC_SYMTAB => {
-                    let header = buf.pread_with::<Symtab_command>(*offset, endianess)?;
+                    let header = buf.pread_with::<Symtab_command>(*offset, endianness)?;
                     let mut syms = Vec::with_capacity(header.n_syms as usize);
                     for i in 0..header.n_syms as usize {
-                        if is_64bit { syms.push(buf.pread_with::<Nlist>(header.sym_off as usize + (i * 16), endianess)?); }
-                        else { syms.push(Nlist::from(buf.pread_with::<Nlist_32>(header.sym_off as usize + (i * 12), endianess)?)); }
+                        if is_64bit { syms.push(buf.pread_with::<Nlist>(header.sym_off as usize + (i * 16), endianness)?); }
+                        else { syms.push(Nlist::from(buf.pread_with::<Nlist_32>(header.sym_off as usize + (i * 12), endianness)?)); }
                     }
                     let strs = buf[header.str_off as usize..header.str_off as usize + header.str_sz as usize].to_vec();
                     symtab = Some(Symtab { header: header.clone(), syms, strs });
                     LoadCommand::SymTab(cmd, header)
                 },
                 LC_DYSYMTAB => {
-                    let dy = buf.pread_with::<Dysymtab_command>(*offset, endianess)?;
+                    let dy = buf.pread_with::<Dysymtab_command>(*offset, endianness)?;
                     dysymtab = Some(dy.clone());
                     LoadCommand::DySymTab(cmd, dy)
                 },
                 LC_TWOLEVEL_HINTS => {
-                    LoadCommand::TwolevelHints(cmd, buf.pread_with(*offset, endianess)?)
+                    LoadCommand::TwolevelHints(cmd, buf.pread_with(*offset, endianness)?)
                 },
                 LC_PREBIND_CKSUM => {
-                    LoadCommand::PrebindCksum(cmd, buf.pread_with(*offset, endianess)?)
+                    LoadCommand::PrebindCksum(cmd, buf.pread_with(*offset, endianness)?)
                 },
                 LC_UUID => {
-                    LoadCommand::UUID(cmd, buf.pread_with(*offset, endianess)?)
+                    LoadCommand::UUID(cmd, buf.pread_with(*offset, endianness)?)
                 },
                 LC_RPATH => {
-                    LoadCommand::Rpath(cmd, buf.pread_with(*offset, endianess)?)
+                    LoadCommand::Rpath(cmd, buf.pread_with(*offset, endianness)?)
                 },
                 LC_CODE_SIGNATURE | LC_SEGMENT_SPLIT_INFO | LC_FUNCTION_STARTS |
                 LC_DATA_IN_CODE | LC_DYLIB_CODE_SIGN_DRS | LC_LINKER_OPTIMIZATION_HINT => {
-                    LoadCommand::LinkeditData(cmd, buf.pread_with(*offset, endianess)?)
+                    LoadCommand::LinkeditData(cmd, buf.pread_with(*offset, endianness)?)
                 },
                 LC_ENCRYPTION_INFO => {
                     LoadCommand::EncryptionInfo(cmd, Encryption_info_command::from(
-                        buf.pread_with::<Encryption_info_command_32>(*offset, endianess)?))
+                        buf.pread_with::<Encryption_info_command_32>(*offset, endianness)?))
                 },
                 LC_ENCRYPTION_INFO_64 => {
-                    LoadCommand::EncryptionInfo(cmd, buf.pread_with::<Encryption_info_command>(*offset, endianess)?)
+                    LoadCommand::EncryptionInfo(cmd, buf.pread_with::<Encryption_info_command>(*offset, endianness)?)
                 },
                 LC_VERSION_MIN_MACOSX | LC_VERSION_MIN_IPHONEOS |
                 LC_VERSION_MIN_WATCHOS | LC_VERSION_MIN_TVOS => {
-                    LoadCommand::VersionMin(cmd, buf.pread_with(*offset, endianess)?)
+                    LoadCommand::VersionMin(cmd, buf.pread_with(*offset, endianness)?)
                 },
                 LC_BUILD_VERSION => {
-                    LoadCommand::BuildVersion(cmd, buf.pread_with(*offset, endianess)?)
+                    LoadCommand::BuildVersion(cmd, buf.pread_with(*offset, endianness)?)
                 },
                 LC_DYLD_INFO | LC_DYLD_INFO_ONLY => {
-                    LoadCommand::DyldInfo(cmd, buf.pread_with(*offset, endianess)?)
+                    LoadCommand::DyldInfo(cmd, buf.pread_with(*offset, endianness)?)
                 },
                 LC_LINKER_OPTION => {
-                    let comm = buf.pread_with::<Load_command>(*offset, endianess)?;
-                    let cnt  = buf.pread_with::<u32>(*offset + 8, endianess)?;
+                    let comm = buf.pread_with::<Load_command>(*offset, endianness)?;
+                    let cnt  = buf.pread_with::<u32>(*offset + 8, endianness)?;
                     let mut strs = Vec::with_capacity(cnt as usize);
                     let stroff = &mut 0_usize;
                     *stroff += *offset + 12;
@@ -887,24 +887,24 @@ impl super::FileFormat for MachO {
                     LoadCommand::LinkerOption(cmd, Linker_option_command { cmd: comm, cnt, strs })
                 },
                 LC_SYMSEG => {
-                    LoadCommand::Symseg(cmd, buf.pread_with(*offset, endianess)?)
+                    LoadCommand::Symseg(cmd, buf.pread_with(*offset, endianness)?)
                 },
                 LC_IDENT => {
-                    let comm = buf.pread_with::<Load_command>(*offset, endianess)?;
+                    let comm = buf.pread_with::<Load_command>(*offset, endianness)?;
                     let strs = buf[*offset + 8..*offset + 8 + comm.cmd_sz as usize].to_vec();
                     LoadCommand::Ident(cmd, Ident_command { cmd: comm, strs } )
                 }
                 LC_FVMFILE => {
-                    LoadCommand::FvmFile(cmd, buf.pread_with(*offset, endianess)?)
+                    LoadCommand::FvmFile(cmd, buf.pread_with(*offset, endianness)?)
                 },
                 LC_MAIN => {
-                    LoadCommand::EntryPoint(cmd, buf.pread_with(*offset, endianess)?)
+                    LoadCommand::EntryPoint(cmd, buf.pread_with(*offset, endianness)?)
                 },
                 LC_SOURCE_VERSION => {
-                    LoadCommand::SourceVersion(cmd, buf.pread_with(*offset, endianess)?)
+                    LoadCommand::SourceVersion(cmd, buf.pread_with(*offset, endianness)?)
                 },
                 LC_NOTE => {
-                    LoadCommand::Note(cmd, buf.pread_with(*offset, endianess)?)
+                    LoadCommand::Note(cmd, buf.pread_with(*offset, endianness)?)
                 }
                 _ => return Err(Error::from(Problem::Msg(format!("Invalid/Unsupported command type: {} at: {:#X}", cmd, *offset)))),
             });
@@ -1047,7 +1047,7 @@ impl super::FileFormat for MachO {
                 //
                 println!();
                 fmt_indentln(format!("{}({})",
-                                     Color::Fixed(75).underline().paint("LocalSymbols"),
+                                     Color::Fixed(75).paint("LocalSymbols"),
                                      dysymtab.local_sym_n));
                 fmt_macho_syms(&symtab.syms[dysymtab.local_sym_idx as usize
                                             ..dysymtab.local_sym_idx as usize + dysymtab.local_sym_n as usize],
@@ -1059,7 +1059,7 @@ impl super::FileFormat for MachO {
                 // EXTERNAL SYMBOLS
                 //
                 fmt_indentln(format!("{}({})",
-                                     Color::Fixed(75).underline().paint("ExternalSymbols"),
+                                     Color::Fixed(75).paint("ExternalSymbols"),
                                      dysymtab.ext_def_sym_n));
                 fmt_macho_syms(&symtab.syms[dysymtab.ext_def_sym_idx as usize
                                             ..dysymtab.ext_def_sym_idx as usize + dysymtab.ext_def_sym_n as usize],
@@ -1071,7 +1071,7 @@ impl super::FileFormat for MachO {
                 // UNDEFINED SYMBOLS
                 //
                 fmt_indentln(format!("{}({})",
-                                     Color::Fixed(75).underline().paint("UndefinedSymbols"),
+                                     Color::Fixed(75).paint("UndefinedSymbols"),
                                      dysymtab.undef_sym_n));
                 fmt_macho_syms(&symtab.syms[dysymtab.undef_sym_idx as usize
                                             ..dysymtab.undef_sym_idx as usize + dysymtab.undef_sym_n as usize],
@@ -1108,12 +1108,13 @@ impl super::FileFormat for MachO {
                      self.libs.len());
 
             for lib in &self.libs {
-                println!("{}", Color::Blue.paint(lib));
+                fmt_indentln(format!("{}", Color::Blue.paint(lib)));
             }
 
         }
 
         Ok(())
+
     }
 
 }

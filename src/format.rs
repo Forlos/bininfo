@@ -480,6 +480,7 @@ pub fn fmt_macho(header: &Mach_header) {
 }
 
 pub fn fmt_macho_syms(syms: &[Nlist], strs: &Vec<u8>, secs: &Vec<Section>, trim_lines: usize) -> Result<(), Error> {
+    use ansi_term::Color;
 
     let mut trimmed = false;
     let mut table = Table::new();
@@ -497,11 +498,11 @@ pub fn fmt_macho_syms(syms: &[Nlist], strs: &Vec<u8>, secs: &Vec<Section>, trim_
             break;
         }
 
-        let mut sect = String::from("NONE");
+        let mut sect = Color::Cyan.paint("NONE");
         if entry.n_sect > 0 {
-        sect = format!("{}.{}" ,
+        sect = Color::Blue.paint(format!("{}.{}" ,
                        std::str::from_utf8(&secs[entry.n_sect as usize - 1].seg_name)?,
-                       std::str::from_utf8(&secs[entry.n_sect as usize - 1].sect_name)?);
+                       std::str::from_utf8(&secs[entry.n_sect as usize - 1].sect_name)?));
         }
 
         table.add_row(row![
