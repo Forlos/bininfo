@@ -14,9 +14,9 @@ Warning: Error handling is very basic and hasn't been tested.
 - [ ] JPG
 - [ ] PDF
 - [x] ELF
-- [x] PE
+- [x] PE(No imports, exports, symbols)
 - [x] JAVA CLASS(11)
-- [ ] MACH-O
+- [x] MACH-O(No imports, exports)
 - [ ] LUA
 
 ## Resources
