@@ -18,6 +18,7 @@ Warning: Error handling is very basic and hasn't been tested.
 - [x] JAVA CLASS(11)
 - [x] MACH-O(No imports, exports)
 - [ ] LUA
+- [ ] ZIP
 
 ## Resources
 
