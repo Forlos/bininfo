@@ -9,7 +9,7 @@ pub const LUA_MAGIC_SIZE: usize = 4;
 #[derive(Debug, Pread)]
 struct Lua_header {
     magic:         u32,
-    /// High hex digit is major version number
+    // High hex digit is major version number
     /// Low hex digit is minor version number
     ver:           u8,
 }
