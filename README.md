@@ -7,6 +7,8 @@ Warning: Error handling is very basic and hasn't been tested.
 ![png_example1](Media/Screenshot1.png)
 ![definitely_not_stolen](Media/Screenshot2.png)
 
+![More screenshots](Media/README.md)
+
 ## Supported formats
 - [x] BMP
 - [x] PNG 1.2, PNGEXT 1.2
