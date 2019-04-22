@@ -1,11 +1,21 @@
 #![allow(non_camel_case_types)]
 use crate::Opt;
 use failure::{Error};
+use scroll::{self, Pread};
 
 pub const ZIP_MAGIC:         &'static [u8; ZIP_MAGIC_SIZE] = b"PK\x03\x04";
 pub const ZIP_MAGIC_EMPTY:   &'static [u8; ZIP_MAGIC_SIZE] = b"PK\x05\x06";
 pub const ZIP_MAGIC_SPANNED: &'static [u8; ZIP_MAGIC_SIZE] = b"PK\x07\x08";
 pub const ZIP_MAGIC_SIZE: usize = 4;
+
+const END_VALUE: u32           = 0x06054b50;
+const CENTRAL_VALUE: u32       = 0x02014b50;
+const EXTRA_VALUE: u32         = 0x08064b50;
+const LOCAL_FILE_VALUE: u32    = 0x04034b50;
+const SIGNATURE_VALUE: u32     = 0x05054b50;
+
+const ZIP64_CENTRAL_VALUE: u32 = 0x06064b50;
+const ZIP64_END_VALUE: u32     = 0x07064b50;
 
 #[derive(Debug, Pread)]
 struct Local_file_header {
@@ -17,6 +27,9 @@ struct Local_file_header {
     last_mod_time: u16,
     last_mod_date: u16,
     crc32:         u32,
+    /// If bit 3 of the general purpose bit flag is set,
+    /// these fields are set to zero in the local header and the
+    /// correct values are put in the data descriptor and in the central directory.
     compr_sz:      u32,
     uncompr_sz:    u32,
     name_sz:       u16,
@@ -27,10 +40,13 @@ struct Local_file_header {
 struct Local_file {
     header: Local_file_header,
     name:   String,
-    extra:  Vec<u8>,
+    extra:  Option<Archive_extra_data>,
+    // enc_header: (),
+    data_desc: Option<Data_descriptior>,
 }
 
-/// This descriptor MUST exist if bit 3 of the general purpose bit flag is set (see below).
+#[derive(Debug)]
+/// This descriptor MUST exist if bit 3 of the general purpose bit flag is set.
 struct Data_descriptior {
     crc32:      u32,
     compr_sz:   u32,
