@@ -112,9 +112,6 @@ fn run(opt: Opt) -> Result<(), Error> {
             pdf.print()?;
         },
 
-        Binary::Xp3(xp3) => {
-            xp3.print()?;
-        },
         Binary::Zip(zip) => {
             zip.print()?;
         }

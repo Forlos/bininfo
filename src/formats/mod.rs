@@ -12,7 +12,6 @@ pub mod macho;
 pub mod lua;
 
 // Archive formats
-pub mod xp3;
 pub mod zip;
 
 // Document formats
