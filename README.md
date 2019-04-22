@@ -19,7 +19,7 @@ Warning: Error handling is very basic and hasn't been tested.
 - [x] PE(No imports, exports, symbols)
 - [x] JAVA CLASS(11)
 - [x] MACH-O(No imports, exports)
-- [ ] LUA
+- [ ] LUA(5.1)
 - [ ] ZIP
 
 ## Resources

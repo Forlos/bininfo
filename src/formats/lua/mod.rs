@@ -1,7 +1,10 @@
 #![allow(non_camel_case_types)]
 use crate::Opt;
+use crate::Problem;
 use failure::{Error};
 use scroll::{self, Pread};
+
+pub mod lua51;
 
 pub const LUA_MAGIC: &'static [u8; LUA_MAGIC_SIZE] = b"\x1BLua";
 pub const LUA_MAGIC_SIZE: usize = 4;
@@ -14,25 +17,10 @@ struct Lua_header {
     ver:           u8,
 }
 
-// struct Function_header {
-//     line_start: u32,
-//     line_end:   u32,
-//     n_params:   u8,
-//     varag_flag: u8,
-//     n_regs:     u8,
-//     n_instr:    u32,
-// }
-
-// struct Constants {
-//     n_consts: u32,
-//     consts:   Vec<Constant>,
-// }
-
-// struct Constant {
-//     const_type: u8,
-//     const_len:  u32,
-//     const_data: Vec<u8>,
-// }
+#[derive(Debug)]
+enum Info {
+    Lua51(lua51::Lua51_info),
+}
 
 #[derive(Debug)]
 /// Each version of lua has a different header !???
@@ -40,6 +28,7 @@ pub struct Lua {
     opt: Opt,
 
     lua_header: Lua_header,
+    info:       Info,
 }
 
 impl super::FileFormat for Lua {
@@ -49,12 +38,17 @@ impl super::FileFormat for Lua {
 
         let offset = &mut 0;
 
-        let lua_header = buf.gread(offset)?;
+        let lua_header = buf.gread::<Lua_header>(offset)?;
+        let info = match lua_header.ver {
+            0x51 => Info::Lua51(lua51::parse(buf, offset)?),
+            _ => return Err(Error::from(Problem::Msg(format!("Unsupported lua version")))),
+        };
 
         Ok(Lua {
             opt,
 
             lua_header,
+            info,
         })
 
     }
