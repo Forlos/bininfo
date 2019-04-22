@@ -88,7 +88,7 @@ struct Inner_function_block {
 }
 
 impl Inner_function_block {
-    fn parse(buf: &[u8], offset: &mut usize, int_sz: u8, lua_number_sz: u8, size_t_sz: u8, endian: scroll::Endian) -> Result<Self, Error> {
+    fn parse(buf: &[u8], offset: &mut usize, int_sz: u8, lua_number_sz: u8, size_t_sz: u8, intr_sz: u8, endian: scroll::Endian) -> Result<Self, Error> {
 
         let mut name_sz = 0;
         if size_t_sz == 4 {
@@ -122,7 +122,7 @@ impl Inner_function_block {
         if int_sz == 8 {
             code_sz = buf.gread_with::<u64>(offset, endian)?;
         }
-        *offset += code_sz as usize * 4;
+        *offset += code_sz as usize * intr_sz as usize;
 
         let mut consts_sz = 0;
         if int_sz == 4 {
@@ -179,7 +179,7 @@ impl Inner_function_block {
 
         let mut funcs = Vec::with_capacity(funcs_sz as usize);
         for _ in 0..funcs_sz as usize {
-            funcs.push(Inner_function_block::parse(buf, offset, int_sz, size_t_sz, lua_number_sz, endian)?);
+            funcs.push(Inner_function_block::parse(buf, offset, int_sz,  lua_number_sz, size_t_sz, intr_sz, endian)?);
         }
 
         let mut source_sz = 0;
@@ -295,6 +295,26 @@ pub struct Lua51_info {
     main_func: Function_block,
 }
 
+impl Lua51_info {
+
+    pub fn print(&self) {
+        use ansi_term::Color;
+
+        println!("Format: {}", self.header.format);
+        println!("Endian: {}", if self.header.endianness == 0 { "Big-endian" } else { "Little-endian" });
+        println!("Size of integer:     {}",     Color::Purple.paint(self.header.int_sz.to_string()));
+        println!("Size of size_t:      {}",     Color::Purple.paint(self.header.size_t_sz.to_string()));
+        println!("Size of instruction: {}", Color::Purple.paint(self.header.intr_sz.to_string()));
+        println!("Size of lua Number:  {}",  Color::Purple.paint(self.header.lua_number_sz.to_string()));
+        println!("Integral flag: {}", self.header.integral_flag);
+        println!();
+
+        println!("Name: {}", Color::Yellow.paint(&self.main_func.name));
+
+    }
+
+}
+
 pub fn parse(buf: &[u8], offset: &mut usize) -> Result<Lua51_info, Error> {
 
     let endianness = buf.pread::<u8>(*offset + 1)?;
@@ -339,7 +359,7 @@ pub fn parse(buf: &[u8], offset: &mut usize) -> Result<Lua51_info, Error> {
     else if header.int_sz == 8 {
         code_sz = buf.gread_with::<u64>(offset, endian)?;
     }
-    *offset += code_sz as usize * 4;
+    *offset += code_sz as usize * header.intr_sz as usize;
 
     let mut consts_sz = 0;
     if header.int_sz == 4 {
@@ -394,7 +414,7 @@ pub fn parse(buf: &[u8], offset: &mut usize) -> Result<Lua51_info, Error> {
 
     let mut funcs = Vec::with_capacity(funcs_sz as usize);
     for _ in 0..funcs_sz as usize {
-        funcs.push(Inner_function_block::parse(buf, offset, header.int_sz, header.lua_number_sz, header.size_t_sz, endian)?);
+        funcs.push(Inner_function_block::parse(buf, offset, header.int_sz, header.lua_number_sz, header.size_t_sz, header.intr_sz, endian)?);
     }
 
     let mut source_sz = 0;
