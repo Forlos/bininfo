@@ -55,14 +55,13 @@ impl super::FileFormat for Lua {
 
     fn print(&self) -> Result<(), Error> {
 
-        println!("{:#X?}", self);
         println!("Lua Bytecode {}.{}",
                  self.lua_header.ver >> 4,
                  self.lua_header.ver << 4 >> 4);
         println!();
 
         match &self.info {
-            Info::Lua51(info) => info.print(),
+            Info::Lua51(info) => info.print(self.opt.trim_lines),
         }
 
         Ok(())

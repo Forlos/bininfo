@@ -520,15 +520,6 @@ struct Dylib_reference {
     refer: u32,
 }
 
-impl Dylib_reference {
-    fn get_index(&self) -> u32 {
-        self.refer >> 8
-    }
-    fn get_flags(&self) -> u8 {
-        ((self.refer << 24) >> 24) as u8
-    }
-}
-
 #[derive(Debug, Pread)]
 struct Twolevel_hints_command {
     cmd:     Load_command,
@@ -539,15 +530,6 @@ struct Twolevel_hints_command {
 #[derive(Debug, Pread)]
 struct Twolevel_hint {
     hint: u32,
-}
-
-impl Twolevel_hint {
-    fn get_image(&self) -> u8 {
-        (self.hint >> 24) as u8
-    }
-    fn get_toc(&self) -> u32 {
-        (self.hint << 8) >> 8
-    }
 }
 
 #[derive(Debug, Pread)]
@@ -751,7 +733,7 @@ impl super::FileFormat for MachO {
         let mut relocs   = Vec::new();
         let mut libs     = Vec::new();
 
-        for i in 0..header.n_cmds {
+        for _ in 0..header.n_cmds {
             let cmd = buf.pread_with::<u32>(*offset, endianness)?;
             let cmd_sz = buf.pread_with::<u32>(*offset + 4, endianness)?;
             commands.push( match cmd {
