@@ -16,7 +16,7 @@ Warning: Error handling is very basic and hasn't been tested.
 - [ ] JPG
 - [ ] PDF
 - [x] ELF
-- [x] PE(No imports, exports, symbols)
+- [x] PE(No exports, symbols)
 - [x] JAVA CLASS(11)
 - [x] MACH-O(No imports, exports)
 - [x] LUA(5.1)

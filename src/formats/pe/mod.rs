@@ -415,6 +415,13 @@ impl super::FileFormat for Pe {
             for (i, dir) in opt_header.data_dirs.dirs.iter().enumerate() {
                 if dir.rva != 0 && dir.sz != 0 {
                     match i {
+                        0 => {
+                            for sect in &sections {
+                                if dir.rva >= sect.virt_addr && dir.rva < sect.virt_addr + sect.virt_sz {
+                                    exports = Some(buf.pread_with(sect.ptr_raw_data as usize + (dir.rva - sect.virt_addr) as usize, scroll::LE)?);
+                                }
+                            }
+                        },
                         1 => {
                             for sect in &sections {
                                 if dir.rva >= sect.virt_addr && dir.rva < sect.virt_addr + sect.virt_sz {
@@ -478,13 +485,6 @@ impl super::FileFormat for Pe {
                                         }
                                         header = buf.gread_with::<Import_dir_table>(offset, scroll::LE)?;
                                     }
-                                }
-                            }
-                        },
-                        0 => {
-                            for sect in &sections {
-                                if dir.rva >= sect.virt_addr && dir.rva < sect.virt_addr + sect.virt_sz {
-                                    exports = Some(buf.pread_with(sect.ptr_raw_data as usize + (dir.rva - sect.virt_addr) as usize, scroll::LE)?);
                                 }
                             }
                         },
@@ -751,9 +751,8 @@ impl super::FileFormat for Pe {
             println!();
         }
 
-        println!("{:#X?}", self.exports);
-        // println!("{:#X?}", self.imports);
-        println!("{:#X?}", self.resources);
+        // println!("{:#X?}", self.exports);
+        // println!("{:#X?}", self.resources);
 
         Ok(())
     }
