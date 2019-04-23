@@ -101,35 +101,35 @@ pub fn section_chara_to_str(characteristics: u32) -> String {
 }
 
 
-pub const IMAGE_DEBUG_TYPE_UNKNOWN: u32               = 0;
-pub const IMAGE_DEBUG_TYPE_COFF: u32                  = 1;
-pub const IMAGE_DEBUG_TYPE_CODEVIEW: u32              = 2;
-pub const IMAGE_DEBUG_TYPE_FPO: u32                   = 3;
-pub const IMAGE_DEBUG_TYPE_MISC: u32                  = 4;
-pub const IMAGE_DEBUG_TYPE_EXCEPTION: u32             = 5;
-pub const IMAGE_DEBUG_TYPE_FIXUP: u32                 = 6;
-pub const IMAGE_DEBUG_TYPE_OMAP_TO_SRC: u32           = 7;
-pub const IMAGE_DEBUG_TYPE_OMAP_FROM_SRC: u32         = 8;
-pub const IMAGE_DEBUG_TYPE_BORLAND: u32               = 9;
-pub const IMAGE_DEBUG_TYPE_RESERVED10: u32            = 10;
-pub const IMAGE_DEBUG_TYPE_CLSID: u32                 = 11;
-pub const IMAGE_DEBUG_TYPE_REPRO: u32                 = 16;
-pub const IMAGE_DEBUG_TYPE_EX_DLLCHARACTERISTICS: u32 = 20;
+// pub const IMAGE_DEBUG_TYPE_UNKNOWN: u32               = 0;
+// pub const IMAGE_DEBUG_TYPE_COFF: u32                  = 1;
+// pub const IMAGE_DEBUG_TYPE_CODEVIEW: u32              = 2;
+// pub const IMAGE_DEBUG_TYPE_FPO: u32                   = 3;
+// pub const IMAGE_DEBUG_TYPE_MISC: u32                  = 4;
+// pub const IMAGE_DEBUG_TYPE_EXCEPTION: u32             = 5;
+// pub const IMAGE_DEBUG_TYPE_FIXUP: u32                 = 6;
+// pub const IMAGE_DEBUG_TYPE_OMAP_TO_SRC: u32           = 7;
+// pub const IMAGE_DEBUG_TYPE_OMAP_FROM_SRC: u32         = 8;
+// pub const IMAGE_DEBUG_TYPE_BORLAND: u32               = 9;
+// pub const IMAGE_DEBUG_TYPE_RESERVED10: u32            = 10;
+// pub const IMAGE_DEBUG_TYPE_CLSID: u32                 = 11;
+// pub const IMAGE_DEBUG_TYPE_REPRO: u32                 = 16;
+// pub const IMAGE_DEBUG_TYPE_EX_DLLCHARACTERISTICS: u32 = 20;
 
-pub const IMAGE_DLLCHARACTERISTICS_EX_CET_COMPAT: u16 = 0x0001;
+// pub const IMAGE_DLLCHARACTERISTICS_EX_CET_COMPAT: u16 = 0x0001;
 
-pub struct Fpo_data {
-    ul_off_start: u32,
-    cb_proc_sz:   u32,
-    cdw_locals:   u32,
-    cdw_params:   u32,
-    flags:        u16,
-}
+// pub struct Fpo_data {
+//     ul_off_start: u32,
+//     cb_proc_sz:   u32,
+//     cdw_locals:   u32,
+//     cdw_params:   u32,
+//     flags:        u16,
+// }
 
-pub const CODEVIEW_PDB70_MAGIC: u32 = 0x53445352;
-pub const CODEVIEW_PDB20_MAGIC: u32 = 0x3031424e;
-pub const CODEVIEW_CV50_MAGIC: u32 = 0x3131424e;
-pub const CODEVIEW_CV41_MAGIC: u32 = 0x3930424e;
+// pub const CODEVIEW_PDB70_MAGIC: u32 = 0x53445352;
+// pub const CODEVIEW_PDB20_MAGIC: u32 = 0x3031424e;
+// pub const CODEVIEW_CV50_MAGIC: u32 = 0x3131424e;
+// pub const CODEVIEW_CV41_MAGIC: u32 = 0x3930424e;
 
 // Characteristics
 

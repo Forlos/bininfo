@@ -436,6 +436,7 @@ impl super::FileFormat for Pe {
                                             let mut entries = Vec::new();
                                             let mut ordinals = Vec::new();
                                             while entry != 0 {
+                                                entry = sect.ptr_raw_data as u64 + (entry - sect.virt_addr as u64);
                                                 if entry & 0x8000000000000000 != 0 {
                                                     // by ordinal
                                                     ordinals.push((entry & 0x0000ffff) as u16);
@@ -449,7 +450,7 @@ impl super::FileFormat for Pe {
                                                 }
                                                 entry = buf.gread_with::<u64>(entry_offset, scroll::LE)?;
                                             }
-                                            let name = buf.pread::<&str>(header.name_rva as usize)?.to_string();
+                                            let name = buf.pread::<&str>(sect.ptr_raw_data as usize + (header.name_rva - sect.virt_addr) as usize)?.to_string();
                                             imports.push( Import_dir { header, name, entries, ordinals });
                                         }
 
@@ -459,6 +460,7 @@ impl super::FileFormat for Pe {
                                             let mut entries = Vec::new();
                                             let mut ordinals = Vec::new();
                                             while entry != 0 {
+                                                entry = sect.ptr_raw_data + (entry - sect.virt_addr);
                                                 if entry & 0x80000000 != 0 {
                                                     // by ordinal
                                                     ordinals.push((entry & 0x0000ffff) as u16);
@@ -472,7 +474,7 @@ impl super::FileFormat for Pe {
                                                 }
                                                 entry = buf.gread_with::<u32>(entry_offset, scroll::LE)?;
                                             }
-                                            let name = buf.pread::<&str>(header.name_rva as usize)?.to_string();
+                                            let name = buf.pread::<&str>(sect.ptr_raw_data as usize + (header.name_rva - sect.virt_addr) as usize)?.to_string();
                                             imports.push( Import_dir { header, name, entries, ordinals });
                                         }
                                         header = buf.gread_with::<Import_dir_table>(offset, scroll::LE)?;
