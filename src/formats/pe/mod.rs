@@ -264,9 +264,10 @@ struct Export_addr_table {
 
 #[derive(Debug)]
 struct Import_dir {
-    header:  Import_dir_table,
-    name:    String,
-    entries: Vec<String>,
+    header:   Import_dir_table,
+    name:     String,
+    entries:  Vec<String>,
+    ordinals: Vec<u16>,
 }
 
 #[derive(Pread, Debug)]
@@ -433,32 +434,34 @@ impl super::FileFormat for Pe {
                                         if opt_header.std_coff.magic == PE32PLUS_MAGIC {
                                             let mut entry = buf.gread_with::<u64>(entry_offset, scroll::LE)?;
                                             let mut entries = Vec::new();
+                                            let mut ordinals = Vec::new();
                                             while entry != 0 {
-                                                // if entry & 0x8000000000000000 != 0 {
-                                                //     println!("ORDINAL");
-                                                //     // by ordinal
-                                                // }
-                                                // else {
+                                                if entry & 0x8000000000000000 != 0 {
+                                                    // by ordinal
+                                                    ordinals.push((entry & 0x0000ffff) as u16);
+                                                }
+                                                else {
                                                     // by name
                                                     let name = buf.pread::<&str>(entry as usize + 2)?.to_string();
                                                     entries.push(name);
                                                     // to align the next entry on an even boundary.
                                                     if *offset % 2 == 1 { *offset += 1 }
-                                                // }
+                                                }
                                                 entry = buf.gread_with::<u64>(entry_offset, scroll::LE)?;
                                             }
                                             let name = buf.pread::<&str>(header.name_rva as usize)?.to_string();
-                                            imports.push( Import_dir { header, name, entries });
+                                            imports.push( Import_dir { header, name, entries, ordinals });
                                         }
 
                                         // 32bit
                                         else {
                                             let mut entry = buf.gread_with::<u32>(entry_offset, scroll::LE)?;
                                             let mut entries = Vec::new();
+                                            let mut ordinals = Vec::new();
                                             while entry != 0 {
                                                 if entry & 0x80000000 != 0 {
-                                                    println!("ORDINAL");
                                                     // by ordinal
+                                                    ordinals.push((entry & 0x0000ffff) as u16);
                                                 }
                                                 else {
                                                     // by name
@@ -470,7 +473,7 @@ impl super::FileFormat for Pe {
                                                 entry = buf.gread_with::<u32>(entry_offset, scroll::LE)?;
                                             }
                                             let name = buf.pread::<&str>(header.name_rva as usize)?.to_string();
-                                            imports.push( Import_dir { header, name, entries });
+                                            imports.push( Import_dir { header, name, entries, ordinals });
                                         }
                                         header = buf.gread_with::<Import_dir_table>(offset, scroll::LE)?;
                                     }
@@ -655,6 +658,85 @@ impl super::FileFormat for Pe {
         }
 
         //
+        // IMPORTS
+        //
+        if self.imports.len() >= 1 {
+            let sum = self.imports.iter().fold(0, |sum, i| {
+                sum + i.entries.len() + i.ordinals.len()
+            });
+            println!("{}({})",
+                     Color::White.underline().paint("Imports"),
+                     sum);
+
+            for imp in &self.imports {
+                fmt_indentln(format!("{}({})({})",
+                         Color::Fixed(75).paint(&imp.name),
+                         imp.entries.len(),
+                         imp.ordinals.len()));
+
+                if imp.entries.len() >= 1 {
+
+                    let mut trimmed = false;
+                    let mut table = Table::new();
+                    let format = prettytable::format::FormatBuilder::new()
+                        .borders(' ')
+                        .column_separator(' ')
+                        .padding(1, 1)
+                        .build();
+                    table.set_format(format);
+                    table.add_row(row![" ", r->"Idx", "Name"]);
+
+                    for (i, entry) in imp.entries.iter().enumerate() {
+                        if i == self.opt.trim_lines {
+                            trimmed = true;
+                            break;
+                        }
+                        table.add_row(row![
+                            " ",
+                            i,
+                            Fy->entry,
+                        ]);
+                    }
+                    table.printstd();
+                    if trimmed {
+                        fmt_indentln(format!("Output trimmed..."));
+                    }
+                    println!();
+                }
+                if imp.ordinals.len() >= 1 {
+
+                    let mut trimmed = false;
+                    let mut table = Table::new();
+                    let format = prettytable::format::FormatBuilder::new()
+                        .borders(' ')
+                        .column_separator(' ')
+                        .padding(1, 1)
+                        .build();
+                    table.set_format(format);
+                    table.add_row(row![" ", r->"Idx", "Ordinal"]);
+
+                    for (i, entry) in imp.ordinals.iter().enumerate() {
+                        if i == self.opt.trim_lines {
+                            trimmed = true;
+                            break;
+                        }
+                        table.add_row(row![
+                            " ",
+                            i,
+                            Fb->entry,
+                        ]);
+                    }
+                    table.printstd();
+                    if trimmed {
+                        fmt_indentln(format!("Output trimmed..."));
+                    }
+                    println!();
+                }
+            }
+            println!();
+        }
+
+        //
         // LIBRARIES
         //
         if self.imports.len() >= 1 {
@@ -669,7 +751,7 @@ impl super::FileFormat for Pe {
         }
 
         println!("{:#X?}", self.exports);
-        println!("{:#X?}", self.imports);
+        // println!("{:#X?}", self.imports);
         println!("{:#X?}", self.resources);
 
         Ok(())
