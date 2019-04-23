@@ -1,17 +1,17 @@
 
 // * Constants for the filetype field of the mach_header
 
-pub const	MH_OBJECT: u32      = 0x1;
+// pub const	MH_OBJECT: u32      = 0x1;
 pub const	MH_EXECUTE: u32     = 0x2;
-pub const	MH_FVMLIB: u32      = 0x3;
-pub const	MH_CORE: u32        = 0x4;
-pub const	MH_PRELOAD: u32     = 0x5;
+// pub const	MH_FVMLIB: u32      = 0x3;
+// pub const	MH_CORE: u32        = 0x4;
+// pub const	MH_PRELOAD: u32     = 0x5;
 pub const	MH_DYLIB: u32       = 0x6;
-pub const	MH_DYLINKER: u32    = 0x7;
-pub const	MH_BUNDLE: u32      = 0x8;
-pub const	MH_DYLIB_STUB: u32  = 0x9;
-pub const	MH_DSYM: u32        = 0xa;
-pub const	MH_KEXT_BUNDLE: u32 = 0xb;
+// pub const	MH_DYLINKER: u32    = 0x7;
+// pub const	MH_BUNDLE: u32      = 0x8;
+// pub const	MH_DYLIB_STUB: u32  = 0x9;
+// pub const	MH_DSYM: u32        = 0xa;
+// pub const	MH_KEXT_BUNDLE: u32 = 0xb;
 
 pub fn mach_is_exe(filetype: u32) -> bool {
     filetype == MH_EXECUTE
@@ -23,32 +23,32 @@ pub fn mach_is_lib(filetype: u32) -> bool {
 
 // * Constants for the flags field of the mach_header
 
-pub const	MH_NOUNDEFS: u32                = 0x1;
-pub const	MH_INCRLINK: u32                = 0x2;
-pub const MH_DYLDLINK: u32                = 0x4;
-pub const MH_BINDATLOAD: u32              = 0x8;
-pub const MH_PREBOUND: u32                = 0x10;
-pub const MH_SPLIT_SEGS: u32              = 0x20;
-pub const MH_LAZY_INIT: u32               = 0x40;
-pub const MH_TWOLEVEL: u32                = 0x80;
-pub const MH_FORCE_FLAT: u32              = 0x100;
-pub const MH_NOMULTIDEFS: u32             = 0x200;
-pub const MH_NOFIXPREBINDING: u32         = 0x400;
-pub const MH_PREBINDABLE: u32             = 0x800;
-pub const MH_ALLMODSBOUND: u32            = 0x1000;
-pub const MH_SUBSECTIONS_VIA_SYMBOLS: u32 = 0x2000;
-pub const MH_CANONICAL: u32               = 0x4000;
-pub const MH_WEAK_DEFINES: u32            = 0x8000;
-pub const MH_BINDS_TO_WEAK: u32           = 0x10000;
-pub const MH_ALLOW_STACK_EXECUTION: u32   = 0x20000;
-pub const MH_ROOT_SAFE: u32               = 0x40000;
-pub const MH_SETUID_SAFE: u32             = 0x80000;
-pub const MH_NO_REEXPORTED_DYLIBS: u32    = 0x100000;
-pub const	MH_PIE: u32                     = 0x200000;
-pub const	MH_DEAD_STRIPPABLE_DYLIB: u32   = 0x400000;
-pub const MH_HAS_TLV_DESCRIPTORS: u32     = 0x800000;
-pub const MH_NO_HEAP_EXECUTION: u32       = 0x1000000;
-pub const MH_APP_EXTENSION_SAFE: u32      = 0x2000000;
+// pub const	MH_NOUNDEFS: u32                = 0x1;
+// pub const	MH_INCRLINK: u32                = 0x2;
+// pub const MH_DYLDLINK: u32                = 0x4;
+// pub const MH_BINDATLOAD: u32              = 0x8;
+// pub const MH_PREBOUND: u32                = 0x10;
+// pub const MH_SPLIT_SEGS: u32              = 0x20;
+// pub const MH_LAZY_INIT: u32               = 0x40;
+// pub const MH_TWOLEVEL: u32                = 0x80;
+// pub const MH_FORCE_FLAT: u32              = 0x100;
+// pub const MH_NOMULTIDEFS: u32             = 0x200;
+// pub const MH_NOFIXPREBINDING: u32         = 0x400;
+// pub const MH_PREBINDABLE: u32             = 0x800;
+// pub const MH_ALLMODSBOUND: u32            = 0x1000;
+// pub const MH_SUBSECTIONS_VIA_SYMBOLS: u32 = 0x2000;
+// pub const MH_CANONICAL: u32               = 0x4000;
+// pub const MH_WEAK_DEFINES: u32            = 0x8000;
+// pub const MH_BINDS_TO_WEAK: u32           = 0x10000;
+// pub const MH_ALLOW_STACK_EXECUTION: u32   = 0x20000;
+// pub const MH_ROOT_SAFE: u32               = 0x40000;
+// pub const MH_SETUID_SAFE: u32             = 0x80000;
+// pub const MH_NO_REEXPORTED_DYLIBS: u32    = 0x100000;
+// pub const	MH_PIE: u32                     = 0x200000;
+// pub const	MH_DEAD_STRIPPABLE_DYLIB: u32   = 0x400000;
+// pub const MH_HAS_TLV_DESCRIPTORS: u32     = 0x800000;
+// pub const MH_NO_HEAP_EXECUTION: u32       = 0x1000000;
+// pub const MH_APP_EXTENSION_SAFE: u32      = 0x2000000;
 
 
 // Constants for the cmd field of all load commands, the type
@@ -170,75 +170,75 @@ pub fn segment_to_str(segment: u32) -> &'static str {
 
 // * Constants for the flags field of the segment_command
 
-pub const	SG_HIGHVM: u32 = 0x1;
-pub const	SG_FVMLIB: u32 = 0x2;
-pub const	SG_NORELOC: u32 = 0x4;
-pub const SG_PROTECTED_VERSION_1: u32 = 0x8;
+// pub const	SG_HIGHVM: u32 = 0x1;
+// pub const	SG_FVMLIB: u32 = 0x2;
+// pub const	SG_NORELOC: u32 = 0x4;
+// pub const SG_PROTECTED_VERSION_1: u32 = 0x8;
 
 // * Known values for the platform field.
 
-pub const PLATFORM_MACOS:   u32 = 1;
-pub const PLATFORM_IOS:     u32 = 2;
-pub const PLATFORM_TVOS:    u32 = 3;
-pub const PLATFORM_WATCHOS: u32 = 4;
+// pub const PLATFORM_MACOS:   u32 = 1;
+// pub const PLATFORM_IOS:     u32 = 2;
+// pub const PLATFORM_TVOS:    u32 = 3;
+// pub const PLATFORM_WATCHOS: u32 = 4;
 
 // * Known values for the tool field.
 
-pub const TOOL_CLANG: u32 = 1;
-pub const TOOL_SWIFT: u32 = 2;
-pub const TOOL_LD:    u32 = 3;
+// pub const TOOL_CLANG: u32 = 1;
+// pub const TOOL_SWIFT: u32 = 2;
+// pub const TOOL_LD:    u32 = 3;
 
 // * The following are used to encode rebasing information
 
-pub const REBASE_TYPE_POINTER:         u32 = 1;
-pub const REBASE_TYPE_TEXT_ABSOLUTE32: u32 = 2;
-pub const REBASE_TYPE_TEXT_PCREL32:    u32 = 3;
+// pub const REBASE_TYPE_POINTER:         u32 = 1;
+// pub const REBASE_TYPE_TEXT_ABSOLUTE32: u32 = 2;
+// pub const REBASE_TYPE_TEXT_PCREL32:    u32 = 3;
 
-pub const REBASE_OPCODE_MASK:                               u32 = 0xF0;
-pub const REBASE_IMMEDIATE_MASK:                            u32 = 0x0F;
-pub const REBASE_OPCODE_DONE:                               u32 = 0x00;
-pub const REBASE_OPCODE_SET_TYPE_IMM:                       u32 = 0x10;
-pub const REBASE_OPCODE_SET_SEGMENT_AND_OFFSET_ULEB:        u32 = 0x20;
-pub const REBASE_OPCODE_ADD_ADDR_ULEB:                      u32 = 0x30;
-pub const REBASE_OPCODE_ADD_ADDR_IMM_SCALED:                u32 = 0x40;
-pub const REBASE_OPCODE_DO_REBASE_IMM_TIMES:                u32 = 0x50;
-pub const REBASE_OPCODE_DO_REBASE_ULEB_TIMES:               u32 = 0x60;
-pub const REBASE_OPCODE_DO_REBASE_ADD_ADDR_ULEB:            u32 = 0x70;
-pub const REBASE_OPCODE_DO_REBASE_ULEB_TIMES_SKIPPING_ULEB: u32 = 0x80;
+// pub const REBASE_OPCODE_MASK:                               u32 = 0xF0;
+// pub const REBASE_IMMEDIATE_MASK:                            u32 = 0x0F;
+// pub const REBASE_OPCODE_DONE:                               u32 = 0x00;
+// pub const REBASE_OPCODE_SET_TYPE_IMM:                       u32 = 0x10;
+// pub const REBASE_OPCODE_SET_SEGMENT_AND_OFFSET_ULEB:        u32 = 0x20;
+// pub const REBASE_OPCODE_ADD_ADDR_ULEB:                      u32 = 0x30;
+// pub const REBASE_OPCODE_ADD_ADDR_IMM_SCALED:                u32 = 0x40;
+// pub const REBASE_OPCODE_DO_REBASE_IMM_TIMES:                u32 = 0x50;
+// pub const REBASE_OPCODE_DO_REBASE_ULEB_TIMES:               u32 = 0x60;
+// pub const REBASE_OPCODE_DO_REBASE_ADD_ADDR_ULEB:            u32 = 0x70;
+// pub const REBASE_OPCODE_DO_REBASE_ULEB_TIMES_SKIPPING_ULEB: u32 = 0x80;
 
 // * The folowing are used to encode binding information
 
-pub const BIND_SPECIAL_DYLIB_SELF:            i32 = 0;
-pub const BIND_SPECIAL_DYLIB_MAIN_EXECUTABLE: i32 = -1;
-pub const BIND_SPECIAL_DYLIB_FLAT_LOOKUP:     i32 =	-2;
+// pub const BIND_SPECIAL_DYLIB_SELF:            i32 = 0;
+// pub const BIND_SPECIAL_DYLIB_MAIN_EXECUTABLE: i32 = -1;
+// pub const BIND_SPECIAL_DYLIB_FLAT_LOOKUP:     i32 =	-2;
 
-pub const BIND_SYMBOL_FLAGS_WEAK_IMPORT:         u32 = 0x1;
-pub const BIND_SYMBOL_FLAGS_NON_WEAK_DEFINITION: u32 = 0x8;
+// pub const BIND_SYMBOL_FLAGS_WEAK_IMPORT:         u32 = 0x1;
+// pub const BIND_SYMBOL_FLAGS_NON_WEAK_DEFINITION: u32 = 0x8;
 
-pub const BIND_OPCODE_MASK:                             u32 = 0xF0;
-pub const BIND_IMMEDIATE_MASK:                          u32 = 0x0F;
-pub const BIND_OPCODE_DONE:                             u32 = 0x00;
-pub const BIND_OPCODE_SET_DYLIB_ORDINAL_IMM:            u32 = 0x10;
-pub const BIND_OPCODE_SET_DYLIB_ORDINAL_ULEB:           u32 = 0x20;
-pub const BIND_OPCODE_SET_DYLIB_SPECIAL_IMM:            u32 = 0x30;
-pub const BIND_OPCODE_SET_SYMBOL_TRAILING_FLAGS_IMM:    u32 = 0x40;
-pub const BIND_OPCODE_SET_TYPE_IMM:                     u32 = 0x50;
-pub const BIND_OPCODE_SET_ADDEND_SLEB:                  u32 = 0x60;
-pub const BIND_OPCODE_SET_SEGMENT_AND_OFFSET_ULEB:      u32 = 0x70;
-pub const BIND_OPCODE_ADD_ADDR_ULEB:                    u32 = 0x80;
-pub const BIND_OPCODE_DO_BIND:                          u32 = 0x90;
-pub const BIND_OPCODE_DO_BIND_ADD_ADDR_ULEB:            u32 = 0xA0;
-pub const BIND_OPCODE_DO_BIND_ADD_ADDR_IMM_SCALED:      u32 = 0xB0;
-pub const BIND_OPCODE_DO_BIND_ULEB_TIMES_SKIPPING_ULEB: u32 = 0xC0;
+// pub const BIND_OPCODE_MASK:                             u32 = 0xF0;
+// pub const BIND_IMMEDIATE_MASK:                          u32 = 0x0F;
+// pub const BIND_OPCODE_DONE:                             u32 = 0x00;
+// pub const BIND_OPCODE_SET_DYLIB_ORDINAL_IMM:            u32 = 0x10;
+// pub const BIND_OPCODE_SET_DYLIB_ORDINAL_ULEB:           u32 = 0x20;
+// pub const BIND_OPCODE_SET_DYLIB_SPECIAL_IMM:            u32 = 0x30;
+// pub const BIND_OPCODE_SET_SYMBOL_TRAILING_FLAGS_IMM:    u32 = 0x40;
+// pub const BIND_OPCODE_SET_TYPE_IMM:                     u32 = 0x50;
+// pub const BIND_OPCODE_SET_ADDEND_SLEB:                  u32 = 0x60;
+// pub const BIND_OPCODE_SET_SEGMENT_AND_OFFSET_ULEB:      u32 = 0x70;
+// pub const BIND_OPCODE_ADD_ADDR_ULEB:                    u32 = 0x80;
+// pub const BIND_OPCODE_DO_BIND:                          u32 = 0x90;
+// pub const BIND_OPCODE_DO_BIND_ADD_ADDR_ULEB:            u32 = 0xA0;
+// pub const BIND_OPCODE_DO_BIND_ADD_ADDR_IMM_SCALED:      u32 = 0xB0;
+// pub const BIND_OPCODE_DO_BIND_ULEB_TIMES_SKIPPING_ULEB: u32 = 0xC0;
 
 // * The folowing are used on the flags byte of a terminal node in the export information.
 
-pub const EXPORT_SYMBOL_FLAGS_KIND_MASK:         u32 = 0x03;
-pub const EXPORT_SYMBOL_FLAGS_KIND_REGULAR:      u32 = 0x00;
-pub const EXPORT_SYMBOL_FLAGS_KIND_THREAD_LOCAL: u32 = 0x01;
-pub const EXPORT_SYMBOL_FLAGS_WEAK_DEFINITION:   u32 = 0x04;
-pub const EXPORT_SYMBOL_FLAGS_REEXPORT:          u32 = 0x08;
-pub const EXPORT_SYMBOL_FLAGS_STUB_AND_RESOLVER: u32 = 0x10;
+// pub const EXPORT_SYMBOL_FLAGS_KIND_MASK:         u32 = 0x03;
+// pub const EXPORT_SYMBOL_FLAGS_KIND_REGULAR:      u32 = 0x00;
+// pub const EXPORT_SYMBOL_FLAGS_KIND_THREAD_LOCAL: u32 = 0x01;
+// pub const EXPORT_SYMBOL_FLAGS_WEAK_DEFINITION:   u32 = 0x04;
+// pub const EXPORT_SYMBOL_FLAGS_REEXPORT:          u32 = 0x08;
+// pub const EXPORT_SYMBOL_FLAGS_STUB_AND_RESOLVER: u32 = 0x10;
 
 // * Constants for the type of a section
 

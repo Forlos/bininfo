@@ -147,22 +147,22 @@ struct Data_dirs {
 
 #[derive(Debug)]
 struct COFF_optional_header {
-    std_coff: Std_COFF_header,
-    win_fields:  Windows_fields,
-    data_dirs:       Data_dirs,
+    std_coff:   Std_COFF_header,
+    win_fields: Windows_fields,
+    data_dirs:  Data_dirs,
 }
 
 #[derive(Pread, Debug)]
 struct Section_table {
-    name: [u8; 8],
-    virt_sz: u32,
-    virt_addr: u32,
-    sz_raw_data: u32,
-    ptr_raw_data: u32,
-    ptr_relocs: u32,
-    ptr_linenum: u32,
-    n_relocs: u16,
-    n_linenum: u16,
+    name:            [u8; 8],
+    virt_sz:         u32,
+    virt_addr:       u32,
+    sz_raw_data:     u32,
+    ptr_raw_data:    u32,
+    ptr_relocs:      u32,
+    ptr_linenum:     u32,
+    n_relocs:        u16,
+    n_linenum:       u16,
     characteristics: u32,
 }
 
@@ -206,26 +206,26 @@ struct Aux_sym_record_1 {
 
 #[derive(Debug)]
 struct Attr_cert_table {
-    dw_length: u32,
-    w_revision: u16,
+    dw_length:   u32,
+    w_revision:  u16,
     w_cert_type: u16,
-    b_cert: Vec<u8>,
+    b_cert:      Vec<u8>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Pread)]
 struct Delay_import_table {
-    attr: u32,
-    name: u32,
-    mod_handle: u32,
+    attr:            u32,
+    name:            u32,
+    mod_handle:      u32,
     /// Delay Import Address Table
-    delay_iat: u32,
+    delay_iat:       u32,
     /// Delay Import Name Table
-    delay_int: u32,
+    delay_int:       u32,
     /// Bound Delay Import Table
-    bound_delay_it: u32,
+    bound_delay_it:  u32,
     /// Unload Delay Import Table
     unload_delay_it: u32,
-    time_stamp: u32,
+    time_stamp:      u32,
 }
 
 #[derive(Pread, Debug)]
@@ -262,6 +262,13 @@ struct Export_addr_table {
     forwarder_rva: u32,
 }
 
+#[derive(Debug)]
+struct Import_dir {
+    header:  Import_dir_table,
+    name:    String,
+    entries: Vec<String>,
+}
+
 #[derive(Pread, Debug)]
 struct Import_dir_table {
     import_lkup_tab_rva: u32,
@@ -269,6 +276,13 @@ struct Import_dir_table {
     forwarder_chain:     u32,
     name_rva:            u32,
     import_addr_tab_rva: u32,
+}
+
+impl Import_dir_table {
+    fn is_null(&self) -> bool {
+        self.import_addr_tab_rva == 0 && self.timedate_stamp == 0 &&
+            self.forwarder_chain == 0 && self.name_rva == 0 && self.import_addr_tab_rva == 0
+    }
 }
 
 #[derive(Pread, Debug)]
@@ -310,7 +324,7 @@ struct Rsrc_dir_entry {
 #[derive(Pread, Debug)]
 struct Rsrc_data_entry {
     data_rva: u32,
-    size: u32,
+    size:     u32,
     codepage: u32,
     reserved: u32,
 }
@@ -324,6 +338,8 @@ pub struct Pe {
 
     sections:             Vec<Section_table>,
 
+    exports:              Option<Export_dir_table>,
+    imports:              Vec<Import_dir>,
     resources:            Option<Rsrc_dir_tab>,
 }
 
@@ -343,6 +359,8 @@ impl super::FileFormat for Pe {
         let win_fields;
         let data_dirs;
 
+        let mut exports   = None;
+        let mut imports   = Vec::new();
         let mut resources = None;
 
         let mut sections: Vec<Section_table> = Vec::with_capacity(coff.n_of_sections as usize);
@@ -391,20 +409,94 @@ impl super::FileFormat for Pe {
             });
         }
 
-        for section in &sections {
+        if let Some(opt_header) = &coff_optional_header {
 
-            match std::str::from_utf8(&section.name)? {
+            for (i, dir) in opt_header.data_dirs.dirs.iter().enumerate() {
+                if dir.rva != 0 && dir.sz != 0 {
+                    match i {
+                        1 => {
+                            for sect in &sections {
+                                if dir.rva >= sect.virt_addr && dir.rva < sect.virt_addr + sect.virt_sz {
+                                    let offset = &mut (sect.ptr_raw_data as usize + (dir.rva - sect.virt_addr) as usize);
+                                    let mut header = buf.gread_with::<Import_dir_table>(offset, scroll::LE)?;
+                                    while !header.is_null() {
+                                        let entry_offset = &mut 0;
+                                        // Original First Thunk
+                                        if header.import_lkup_tab_rva != 0 {
+                                            *entry_offset += sect.ptr_raw_data as usize + (header.import_lkup_tab_rva - sect.virt_addr) as usize;
+                                        }
+                                        // First Thunk
+                                        else {
+                                            *entry_offset += sect.ptr_raw_data as usize + (header.import_addr_tab_rva - sect.virt_addr) as usize;
+                                        }
+                                        // 64bit
+                                        if opt_header.std_coff.magic == PE32PLUS_MAGIC {
+                                            let mut entry = buf.gread_with::<u64>(entry_offset, scroll::LE)?;
+                                            let mut entries = Vec::new();
+                                            while entry != 0 {
+                                                // if entry & 0x8000000000000000 != 0 {
+                                                //     println!("ORDINAL");
+                                                //     // by ordinal
+                                                // }
+                                                // else {
+                                                    // by name
+                                                    let name = buf.pread::<&str>(entry as usize + 2)?.to_string();
+                                                    entries.push(name);
+                                                    // to align the next entry on an even boundary.
+                                                    if *offset % 2 == 1 { *offset += 1 }
+                                                // }
+                                                entry = buf.gread_with::<u64>(entry_offset, scroll::LE)?;
+                                            }
+                                            let name = buf.pread::<&str>(header.name_rva as usize)?.to_string();
+                                            imports.push( Import_dir { header, name, entries });
+                                        }
 
-                ".rsrc" => {
-                    resources = Some(buf.pread_with(section.virt_addr as usize, scroll::LE)?);
-                },
-                _ => (),
-
+                                        // 32bit
+                                        else {
+                                            let mut entry = buf.gread_with::<u32>(entry_offset, scroll::LE)?;
+                                            let mut entries = Vec::new();
+                                            while entry != 0 {
+                                                if entry & 0x80000000 != 0 {
+                                                    println!("ORDINAL");
+                                                    // by ordinal
+                                                }
+                                                else {
+                                                    // by name
+                                                    let name = buf.pread::<&str>(entry as usize + 2)?.to_string();
+                                                    entries.push(name);
+                                                    // to align the next entry on an even boundary.
+                                                    if *offset % 2 == 1 { *offset += 1 }
+                                                }
+                                                entry = buf.gread_with::<u32>(entry_offset, scroll::LE)?;
+                                            }
+                                            let name = buf.pread::<&str>(header.name_rva as usize)?.to_string();
+                                            imports.push( Import_dir { header, name, entries });
+                                        }
+                                        header = buf.gread_with::<Import_dir_table>(offset, scroll::LE)?;
+                                    }
+                                }
+                            }
+                        },
+                        0 => {
+                            for sect in &sections {
+                                if dir.rva >= sect.virt_addr && dir.rva < sect.virt_addr + sect.virt_sz {
+                                    exports = Some(buf.pread_with(sect.ptr_raw_data as usize + (dir.rva - sect.virt_addr) as usize, scroll::LE)?);
+                                }
+                            }
+                        },
+                        2  => {
+                            for sect in &sections {
+                                if dir.rva >= sect.virt_addr && dir.rva < sect.virt_addr + sect.virt_sz {
+                                    resources = Some(buf.pread_with(sect.ptr_raw_data as usize + (dir.rva - sect.virt_addr) as usize, scroll::LE)?);
+                                }
+                            }
+                        },
+                        _ => (),
+                    }
+                }
             }
 
         }
-
-
 
         Ok(Pe {
             opt,
@@ -414,6 +506,8 @@ impl super::FileFormat for Pe {
 
             sections,
 
+            exports,
+            imports,
             resources,
         })
 
@@ -468,8 +562,8 @@ impl super::FileFormat for Pe {
                                  Color::Green.paint(format!("{:#X}", opt.win_fields.sz_of_img)),
                                  Color::Green.paint(format!("{:#X}", opt.win_fields.sz_of_headers))));
             fmt_indentln(format!("Checksum: {:#X}", opt.win_fields.checksum));
-            fmt_indentln(format!("Subsystem: {}", subsys_to_str(opt.win_fields.subsys)));
-            fmt_indentln(format!("DLL Characteristics: {}", dllchara_to_str(opt.win_fields.dll_chara)));
+            fmt_indentln(format!("Subsystem: {}", Color::White.paint(subsys_to_str(opt.win_fields.subsys))));
+            fmt_indentln(format!("DLL Characteristics: {}", Color::White.paint(dllchara_to_str(opt.win_fields.dll_chara))));
             fmt_indentln(format!("Size of stack commit: {}, Size of stack reserve: {}",
                                  Color::Green.paint(format!("{:#X}", opt.win_fields.sz_stack_commit)),
                                  Color::Green.paint(format!("{:#X}", opt.win_fields.sz_stack_reserve))));
@@ -557,8 +651,26 @@ impl super::FileFormat for Pe {
             if trimmed {
                 fmt_indentln(format!("Output trimmed..."));
             }
-
+            println!();
         }
+
+        //
+        // LIBRARIES
+        //
+        if self.imports.len() >= 1 {
+            println!("{}({})",
+                     Color::White.underline().paint("Libraries"),
+                     self.imports.len());
+
+            for lib in &self.imports {
+                fmt_indentln(format!("{}", Color::Blue.paint(&lib.name)));
+            }
+            println!();
+        }
+
+        println!("{:#X?}", self.exports);
+        println!("{:#X?}", self.imports);
+        println!("{:#X?}", self.resources);
 
         Ok(())
     }
