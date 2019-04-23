@@ -421,6 +421,8 @@ impl super::FileFormat for Pe {
                                     let offset = &mut (sect.ptr_raw_data as usize + (dir.rva - sect.virt_addr) as usize);
                                     let mut header = buf.gread_with::<Import_dir_table>(offset, scroll::LE)?;
                                     while !header.is_null() {
+                                        println!("{:#X?}", header);
+
                                         let entry_offset = &mut 0;
                                         // Original First Thunk
                                         if header.import_lkup_tab_rva != 0 {
@@ -436,17 +438,15 @@ impl super::FileFormat for Pe {
                                             let mut entries = Vec::new();
                                             let mut ordinals = Vec::new();
                                             while entry != 0 {
-                                                entry = sect.ptr_raw_data as u64 + (entry - sect.virt_addr as u64);
                                                 if entry & 0x8000000000000000 != 0 {
                                                     // by ordinal
                                                     ordinals.push((entry & 0x0000ffff) as u16);
                                                 }
                                                 else {
+                                                    entry = sect.ptr_raw_data as u64 + (entry - sect.virt_addr as u64);
                                                     // by name
                                                     let name = buf.pread::<&str>(entry as usize + 2)?.to_string();
                                                     entries.push(name);
-                                                    // to align the next entry on an even boundary.
-                                                    if *offset % 2 == 1 { *offset += 1 }
                                                 }
                                                 entry = buf.gread_with::<u64>(entry_offset, scroll::LE)?;
                                             }
@@ -457,20 +457,19 @@ impl super::FileFormat for Pe {
                                         // 32bit
                                         else {
                                             let mut entry = buf.gread_with::<u32>(entry_offset, scroll::LE)?;
+                                            println!("Offset: {:#X}", *entry_offset);
                                             let mut entries = Vec::new();
                                             let mut ordinals = Vec::new();
                                             while entry != 0 {
-                                                entry = sect.ptr_raw_data + (entry - sect.virt_addr);
                                                 if entry & 0x80000000 != 0 {
                                                     // by ordinal
                                                     ordinals.push((entry & 0x0000ffff) as u16);
                                                 }
                                                 else {
+                                                    entry = sect.ptr_raw_data + (entry - sect.virt_addr);
                                                     // by name
                                                     let name = buf.pread::<&str>(entry as usize + 2)?.to_string();
                                                     entries.push(name);
-                                                    // to align the next entry on an even boundary.
-                                                    if *offset % 2 == 1 { *offset += 1 }
                                                 }
                                                 entry = buf.gread_with::<u32>(entry_offset, scroll::LE)?;
                                             }
