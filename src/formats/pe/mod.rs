@@ -240,6 +240,22 @@ struct Debug_dir {
     ptr_data:        u32,
 }
 
+#[derive(Debug)]
+struct Export_dir {
+    header:        Export_dir_table,
+    func_addr:     Vec<u32>,
+    func_names:    Vec<String>,
+    func_ordinals: Vec<u16>,
+    funcs:         Vec<Export_func>,
+}
+
+#[derive(Debug)]
+struct Export_func {
+    addr: u32,
+    name: String,
+    ordinal: u16,
+}
+
 
 #[derive(Pread, Debug)]
 struct Export_dir_table {
@@ -339,7 +355,7 @@ pub struct Pe {
 
     sections:             Vec<Section_table>,
 
-    exports:              Option<Export_dir_table>,
+    exports:              Option<Export_dir>,
     imports:              Vec<Import_dir>,
     resources:            Option<Rsrc_dir_tab>,
 }
@@ -418,7 +434,47 @@ impl super::FileFormat for Pe {
                         0 => {
                             for sect in &sections {
                                 if dir.rva >= sect.virt_addr && dir.rva < sect.virt_addr + sect.virt_sz {
-                                    exports = Some(buf.pread_with(sect.ptr_raw_data as usize + (dir.rva - sect.virt_addr) as usize, scroll::LE)?);
+                                    let header = buf.pread_with::<Export_dir_table>(sect.ptr_raw_data as usize + (dir.rva - sect.virt_addr) as usize, scroll::LE)?;
+                                    let mut func_addr  = Vec::with_capacity(header.addr_tab_entries as usize);
+
+                                    let addr_offset = &mut (sect.ptr_raw_data as usize + (header.export_addr_tab_rva - sect.virt_addr) as usize);
+                                    for _ in 0..header.addr_tab_entries as usize {
+                                        func_addr.push(buf.gread_with(addr_offset, scroll::LE)?);
+                                    }
+                                    let mut func_names = Vec::with_capacity(header.n_name_ptr as usize);
+
+                                    let names_offset = &mut (sect.ptr_raw_data as usize + (header.name_ptr_rva - sect.virt_addr) as usize);
+                                    for _ in 0..header.n_name_ptr as usize {
+                                        let name_rva = sect.ptr_raw_data as usize + (buf.gread_with::<u32>(names_offset, scroll::LE)? - sect.virt_addr) as usize;
+                                        //TODO do name demangling
+                                        func_names.push(buf.pread::<&str>(name_rva)?.to_string());
+                                    }
+                                    let mut func_ordinals = Vec::with_capacity(header.n_name_ptr as usize);
+
+                                    let ordinals_offset = &mut (sect.ptr_raw_data as usize + (header.ord_tab_rva - sect.virt_addr) as usize);
+                                    for _ in 0..header.n_name_ptr as usize {
+                                        func_ordinals.push(buf.gread_with(ordinals_offset, scroll::LE)?);
+                                    }
+                                    let mut funcs = Vec::with_capacity(header.addr_tab_entries as usize);
+
+                                    // https://stackoverflow.com/questions/5653316/pe-export-directory-tables-ordinalbase-field-ignored
+                                    for i in 0..header.n_name_ptr as usize {
+                                        let ordinal =  func_ordinals[i] + header.ord_base as u16;
+                                        funcs.push( Export_func { addr: func_addr[ordinal as usize - header.ord_base as usize] , name: func_names[i].clone(), ordinal } );
+                                    }
+                                    for i in funcs.len()..header.addr_tab_entries as usize {
+                                        funcs.push( Export_func { addr: func_addr[i], name: "[NONAME]".to_owned(), ordinal: i as u16 } )
+                                    }
+
+
+
+                                    exports = Some(Export_dir {
+                                        header,
+                                        func_addr,
+                                        func_names,
+                                        func_ordinals,
+                                        funcs,
+                                    });
                                 }
                             }
                         },
@@ -428,8 +484,6 @@ impl super::FileFormat for Pe {
                                     let offset = &mut (sect.ptr_raw_data as usize + (dir.rva - sect.virt_addr) as usize);
                                     let mut header = buf.gread_with::<Import_dir_table>(offset, scroll::LE)?;
                                     while !header.is_null() {
-                                        println!("{:#X?}", header);
-
                                         let entry_offset = &mut 0;
                                         // Original First Thunk
                                         if header.import_lkup_tab_rva != 0 {
@@ -738,6 +792,44 @@ impl super::FileFormat for Pe {
         }
 
         //
+        // EXPORTS
+        //
+        if let Some(exports) = &self.exports {
+            println!("{}({})",
+                     Color::White.underline().paint("Exports"),
+                     exports.func_addr.len());
+
+            let mut trimmed = false;
+            let mut table = Table::new();
+            let format = prettytable::format::FormatBuilder::new()
+                .borders(' ')
+                .column_separator(' ')
+                .padding(1, 1)
+                .build();
+            table.set_format(format);
+            table.add_row(row!["Idx", "Addr", "Name", "Ordinal"]);
+
+            for (i, entry) in exports.funcs.iter().enumerate() {
+                if i == self.opt.trim_lines {
+                    trimmed = true;
+                    break;
+                }
+                table.add_row(row![
+                    i,
+                    Color::Red.paint(format!("{:#X}", entry.addr)),
+                    Fy->entry.name,
+                    Fb->entry.ordinal,
+                ]);
+            }
+            table.printstd();
+            if trimmed {
+                fmt_indentln(format!("Output trimmed..."));
+            }
+            println!();
+
+        }
+
+        //
         // LIBRARIES
         //
         if self.imports.len() >= 1 {
@@ -750,9 +842,6 @@ impl super::FileFormat for Pe {
             }
             println!();
         }
-
-        // println!("{:#X?}", self.exports);
-        // println!("{:#X?}", self.resources);
 
         Ok(())
     }

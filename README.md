@@ -47,6 +47,7 @@ Warning: Error handling is very basic and hasn't been tested.
 
 ### Pe
 - https://docs.microsoft.com/en-us/windows/desktop/Debug/pe-format
+- http://www.win32assembly.programminghorizon.com/pe-tut1.html
 
 ### Png
 - http://www.libpng.org/pub/png/pngsuite.html
