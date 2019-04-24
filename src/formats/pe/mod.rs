@@ -798,6 +798,17 @@ impl super::FileFormat for Pe {
             println!("{}({})",
                      Color::White.underline().paint("Exports"),
                      exports.func_addr.len());
+            fmt_indentln(format!("Export flags: {:#X}", exports.header.export_flags));
+            fmt_indentln(format!("Time/date stamp: {:#X}", exports.header.timedate_stamp));
+            fmt_indentln(format!("Version: {}.{}",
+                     exports.header.major_ver,
+                     exports.header.minor_ver));
+            fmt_indentln(format!("Ordinal base: {}", exports.header.ord_base));
+            fmt_indentln(format!("Number of functions: {}",
+                     Color::Purple.paint(exports.header.addr_tab_entries.to_string())));
+            fmt_indentln(format!("Number of names:     {}",
+                     Color::Purple.paint(exports.header.n_name_ptr.to_string())));
+            println!();
 
             let mut trimmed = false;
             let mut table = Table::new();
