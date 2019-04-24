@@ -17,3 +17,7 @@
 ### MACH-O
 
 ![macho_example1](Screenshot5.png)
+
+### LUA
+
+![lua_example1](Screenshot6.png)
