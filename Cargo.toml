@@ -1,6 +1,6 @@
 [package]
 name = "bininfo"
-version = "0.2.5"
+version = "0.2.7"
 authors = ["Forlos <forlos@disroot.org>"]
 edition = "2018"
 publish = false

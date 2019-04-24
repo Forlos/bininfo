@@ -71,6 +71,7 @@ fn run(opt: Opt) -> Result<(), Error> {
     let mut fd = File::open(file_path)
         .map_err(|e| Problem::Msg(format!("Cannot open file {:?}: {}", file_path, e)))?;
 
+
     let mut buffer = Vec::new();
     fd.read_to_end(&mut buffer)
         .map_err(|e| Problem::Msg(format!("Cannot read file {:?}: {}", file_path, e)))?;
@@ -84,24 +85,37 @@ fn run(opt: Opt) -> Result<(), Error> {
         Binary::Png(png) => {
             png.print()?;
         },
-        Binary::Elf(elf) => {
-            elf.print()?;
-        },
         Binary::Gif(gif) => {
             gif.print()?;
         },
-        Binary::Pdf(pdf) => {
-            pdf.print()?;
-        }
         Binary::Jpg(jpg) => {
             jpg.print()?;
-        }
+        },
+
         Binary::Pe(pe) => {
             pe.print()?;
-        }
+        },
+        Binary::Elf(elf) => {
+            elf.print()?;
+        },
         Binary::JavaClass(java_class) => {
             java_class.print()?;
+        },
+        Binary::MachO(macho) => {
+            macho.print()?;
         }
+        Binary::Lua(lua) => {
+            lua.print()?;
+        }
+
+        Binary::Pdf(pdf) => {
+            pdf.print()?;
+        },
+
+        Binary::Zip(zip) => {
+            zip.print()?;
+        }
+
         Binary::Unknown  => {
             use ansi_term::Color;
 

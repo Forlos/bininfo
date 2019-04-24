@@ -16,8 +16,11 @@ Warning: Error handling is very basic and hasn't been tested.
 - [ ] JPG
 - [ ] PDF
 - [x] ELF
-- [x] PE
+- [x] PE(No symbols)
 - [x] JAVA CLASS(11)
+- [x] MACH-O(No imports, exports)
+- [x] LUA(5.1)
+- [ ] ZIP
 
 ## Resources
 
@@ -34,12 +37,26 @@ Warning: Error handling is very basic and hasn't been tested.
 ### JavaClass
 - https://docs.oracle.com/javase/specs/jvms/se11/html/jvms-4.html
 
+### Lua
+- http://files.catwell.info/misc/mirror/lua-5.2-bytecode-vm-dirk-laurie/lua52vm.html
+- http://luaforge.net/docman/83/98/ANoFrillsIntroToLua51VMInstructions.pdf
+
+### Mach-O
+- https://opensource.apple.com/source/xnu/xnu-4903.221.2/EXTERNAL_HEADERS/mach-o/loader.h.auto.html
+- https://opensource.apple.com/source/xnu/xnu-4903.221.2/osfmk/mach/
+
 ### Pe
 - https://docs.microsoft.com/en-us/windows/desktop/Debug/pe-format
+- http://www.win32assembly.programminghorizon.com/pe-tut1.html
 
 ### Png
 - http://www.libpng.org/pub/png/pngsuite.html
 - http://www.libpng.org/pub/png/png-sitemap.html#images
 
+### Zip
+- https://pkware.cachefly.net/webdocs/casestudies/APPNOTE.TXT
+
 ### Other
 - https://github.com/corkami
+- https://en.wikipedia.org/wiki/List_of_file_signatures
+- http://fileformats.archiveteam.org/wiki/Main_Page

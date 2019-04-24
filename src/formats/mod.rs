@@ -1,11 +1,21 @@
+// Image formats
 pub mod png;
 pub mod bmp;
-pub mod elf;
 pub mod gif;
-pub mod pdf;
 pub mod jpg;
+
+// Executable formats
 pub mod pe;
+pub mod elf;
 pub mod javaclass;
+pub mod macho;
+pub mod lua;
+
+// Archive formats
+pub mod zip;
+
+// Document formats
+pub mod pdf;
 
 use crate::Opt;
 use failure::{Error};

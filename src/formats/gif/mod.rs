@@ -10,9 +10,6 @@ pub const GIF89A_MAGIC: &'static [u8; GIF_MAGIC_SIZE] = b"GIF89a";
 pub const GIF_MAGIC_SIZE: usize = 6;
 pub const LSD_SIZE: usize = 7;
 
-// TODO allow to use this as a argument and disable trimming in general.
-const TRIM_INDEX: usize = 20;
-
 #[derive(Debug, Pread)]
 #[repr(C)]
 struct RGB {
@@ -137,6 +134,7 @@ struct Img_desc {
     packed_fields: u8,
 }
 
+#[derive(Debug)]
 pub struct Gif {
     opt:      Opt,
 
@@ -365,7 +363,7 @@ impl super::FileFormat for Gif {
                                    rFr->format!("{:#04X}", rgb.red),
                                    rFg->format!("{:#04X}", rgb.green),
                                    rFb->format!("{:#04X}", rgb.blue)]);
-                if i == TRIM_INDEX {
+                if i == self.opt.trim_lines {
                     trimmed = true;
                     break;
                 }
@@ -469,7 +467,7 @@ impl super::FileFormat for Gif {
                                    rFr->format!("{:#04X}", rgb.red),
                                    rFg->format!("{:#04X}", rgb.green),
                                    rFb->format!("{:#04X}", rgb.blue)]);
-                if i == TRIM_INDEX {
+                if i == self.opt.trim_lines {
                     trimmed = true;
                     break;
                 }
@@ -484,6 +482,64 @@ impl super::FileFormat for Gif {
 
 
         Ok(())
+
+    }
+
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn gif_corkami_test() {
+
+        let file = vec![b'G', b'I', b'F', 0x08, 0x09, b'a', 0x03, 0x00, 0x01, 0x00, 0xA1, 0x00, 0x00, 0xFF, 0x00, 0x00,
+                        0x00, 0xFF, 0x00, 0x00, 0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0x2C, 0x00, 0x00, 0x00, 0x00, 0x03, 0x00,
+                        0x01, 0x00, 0x00, 0x02, 0x02, 0x44, 0x54, 0x00, 0x3B];
+
+        let correct = Gif {
+            opt: Opt {
+                trim_lines: 0,
+                file: "".to_owned(),
+                wrap_chars: 0,
+            },
+            header: Gif_header {
+                magic:   [b'G', b'I', b'F'],
+                version: [b'8', b'9', b'a'],
+            },
+            lsd: LSD {
+                logic_width:        3,
+                logic_height:       1,
+                packed_fields:      0xA1,
+                bkg_color_idx:      0x00,
+                pixel_aspect_ratio: 0x00,
+            },
+            gct: Some(GCT {
+                table: vec![RGB { red: 0xFF, green: 0x00, blue: 0x00 },
+                            RGB { red: 0x00, green: 0xFF, blue: 0x00 },
+                            RGB { red: 0x00, green: 0x00, blue: 0xFF },
+                            RGB { red: 0xFF, green: 0xFF, blue: 0xFF },],
+            }),
+            img_desc: Img_desc {
+                separator:     0x2C,
+                left_pos:      0,
+                top_pos:       0,
+                width:         3,
+                height:        1,
+                packed_fields: 0x2,
+            },
+            lct: None,
+            gc_ext: None,
+            comment_ext: None,
+            pt_ext: None,
+            app_ext: None,
+            // trailer: 0x3B,
+        };
+        use crate::formats::FileFormat;
+
+        let gif = super::Gif::parse(Opt { trim_lines: 0, file: "".to_owned(), wrap_chars: 0, }, &file).unwrap();
+        // assert_eq!(correct, gif)
 
     }
 
